@@ -39,6 +39,7 @@ interface AppState extends PersistedAppData {
 
 let saveTimer: number | null = null;
 const LOCAL_BACKUP_KEY = "irontrack-local-backup-v1";
+const LOCAL_DIRTY_KEY = "irontrack-local-dirty-v1";
 
 function readLocalBackup() {
   if (typeof window === "undefined") return null;
@@ -60,6 +61,25 @@ function writeLocalBackup(data: PersistedAppData) {
     window.localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(data));
   } catch (error) {
     console.error("Local backup write failed", error);
+  }
+}
+
+function readLocalDirtyFlag() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(LOCAL_DIRTY_KEY) === "1";
+}
+
+function writeLocalDirtyFlag(isDirty: boolean) {
+  if (typeof window === "undefined") return;
+
+  try {
+    if (isDirty) {
+      window.localStorage.setItem(LOCAL_DIRTY_KEY, "1");
+    } else {
+      window.localStorage.removeItem(LOCAL_DIRTY_KEY);
+    }
+  } catch (error) {
+    console.error("Local dirty flag write failed", error);
   }
 }
 
@@ -92,44 +112,64 @@ function snapshot(state: AppState): PersistedAppData {
   };
 }
 
-function scheduleRemoteSave(get: () => AppState, set: (partial: Partial<AppState>) => void) {
-  if (typeof window === "undefined") return;
-  writeLocalBackup(snapshot(get()));
-  if (saveTimer) window.clearTimeout(saveTimer);
+async function persistSnapshot(
+  data: PersistedAppData,
+  set: (partial: Partial<AppState>) => void,
+) {
+  writeLocalBackup(data);
+  writeLocalDirtyFlag(true);
+  set({ isSyncing: true, lastSyncError: null });
 
-  saveTimer = window.setTimeout(async () => {
-    set({ isSyncing: true, lastSyncError: null });
-    try {
-      const response = await fetch("/api/state", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(snapshot(get())),
-      });
+  try {
+    const response = await fetch("/api/state", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      keepalive: true,
+      body: JSON.stringify(data),
+    });
 
-      const payload = await response.json().catch(() => null);
+    const payload = await response.json().catch(() => null);
 
-      if (!response.ok) {
-        set({
-          backendConfigured: Boolean(payload?.backendConfigured),
-          lastSyncError: payload?.error ?? "Echec de la sauvegarde serveur.",
-        });
-        return;
-      }
-
+    if (!response.ok) {
       set({
         backendConfigured: Boolean(payload?.backendConfigured),
-        lastSyncError: null,
+        lastSyncError: payload?.error ?? "Echec de la sauvegarde serveur.",
       });
-    } catch (error) {
-      console.error("Remote save failed", error);
-      set({
-        lastSyncError: "Connexion au serveur impossible. Sauvegarde locale conservee.",
-      });
-    } finally {
-      set({ isSyncing: false });
+      return;
     }
+
+    writeLocalDirtyFlag(false);
+    if (payload?.data) {
+      writeLocalBackup(normalizePersistedAppData(payload.data));
+    }
+    set({
+      backendConfigured: Boolean(payload?.backendConfigured),
+      lastSyncError: null,
+    });
+  } catch (error) {
+    console.error("Remote save failed", error);
+    set({
+      lastSyncError: "Connexion au serveur impossible. Sauvegarde locale conservee.",
+    });
+  } finally {
+    set({ isSyncing: false });
+  }
+}
+
+function scheduleRemoteSave(get: () => AppState, set: (partial: Partial<AppState>) => void) {
+  if (typeof window === "undefined") return;
+
+  const data = snapshot(get());
+  writeLocalBackup(data);
+  writeLocalDirtyFlag(true);
+
+  if (saveTimer) window.clearTimeout(saveTimer);
+
+  saveTimer = window.setTimeout(() => {
+    void persistSnapshot(snapshot(get()), set);
   }, 350);
 }
 
@@ -140,13 +180,26 @@ export const useAppStore = create<AppState>()((set, get) => ({
     if (state.hasHydrated || state.isRemoteLoading) return;
 
     const localBackup = readLocalBackup();
+    const localDirty = readLocalDirtyFlag();
+
     if (localBackup) {
       set({
         ...localBackup,
         hasHydrated: true,
-        isRemoteLoading: true,
+        isRemoteLoading: !localDirty,
       });
-    } else {
+    }
+
+    if (localBackup && localDirty) {
+      await persistSnapshot(localBackup, set);
+      set({
+        hasHydrated: true,
+        isRemoteLoading: false,
+      });
+      return;
+    }
+
+    if (!localBackup) {
       set({ isRemoteLoading: true });
     }
 
