@@ -11,6 +11,7 @@ import { useAppStore } from "@/lib/store";
 export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const { setTheme } = useTheme();
   const hasHydrated = useAppStore((state) => state.hasHydrated);
+  const loadRemoteState = useAppStore((state) => state.loadRemoteState);
   const profile = useAppStore((state) => state.profile);
   const preferences = useAppStore((state) => state.preferences);
   const completeOnboarding = useAppStore((state) => state.completeOnboarding);
@@ -18,6 +19,10 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const [name, setName] = useState(profile.name);
   const [focus, setFocus] = useState(profile.trainingFocus);
   const [weeklyTarget, setWeeklyTarget] = useState(String(profile.weeklyTarget));
+
+  useEffect(() => {
+    void loadRemoteState();
+  }, [loadRemoteState]);
 
   useEffect(() => {
     if (hasHydrated) {
@@ -59,8 +64,8 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
                 Setup express
               </div>
               <p className="text-sm text-muted-foreground">
-                Quelques infos suffisent. L&apos;app charge deja une base d&apos;exercices et des seances
-                realistes pour demarrer tout de suite.
+                Quelques infos suffisent. L&apos;app charge votre bibliotheque de base, sans
+                aucune seance fictive, puis sauvegarde ensuite vos vraies donnees.
               </p>
             </div>
 

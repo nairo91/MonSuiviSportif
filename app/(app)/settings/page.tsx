@@ -23,6 +23,8 @@ export default function SettingsPage() {
   const goals = useAppStore((state) => state.goals);
   const activeWorkout = useAppStore((state) => state.activeWorkout);
   const lastCompletedSessionId = useAppStore((state) => state.lastCompletedSessionId);
+  const backendConfigured = useAppStore((state) => state.backendConfigured);
+  const isSyncing = useAppStore((state) => state.isSyncing);
   const setThemePreference = useAppStore((state) => state.setThemePreference);
   const setUnits = useAppStore((state) => state.setUnits);
   const updateProfile = useAppStore((state) => state.updateProfile);
@@ -81,8 +83,19 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Preferences"
         title="Parametres"
-        description="Theme, profil local, sauvegarde JSON et gestion du stockage."
+        description="Theme, profil local, backend de sauvegarde et gestion du stockage."
       />
+
+      <Card className="glass-card">
+        <CardContent className="space-y-3">
+          <h2 className="font-display text-xl font-semibold">Etat backend</h2>
+          <div className="rounded-[22px] border border-white/8 bg-white/4 p-4 text-sm text-muted-foreground">
+            <p>Connexion base: {backendConfigured ? "configuree" : "non configuree"}</p>
+            <p>Synchronisation: {isSyncing ? "en cours" : "au repos"}</p>
+            <p>Mode cible: sauvegarde serveur persistante des vraies seances.</p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="glass-card">
         <CardContent className="space-y-4">
@@ -185,7 +198,7 @@ export default function SettingsPage() {
               if (window.confirm("Reinitialiser toutes les donnees locales ?")) {
                 resetData();
                 setTheme("dark");
-                toast.success("Donnees reinitialisees.");
+                toast.success("Donnees reinitialisees et renvoyees au backend.");
               }
             }}
           >

@@ -16,7 +16,7 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: "IronTrack",
   description:
-    "Application premium de suivi de musculation, pensée pour un usage quotidien sur iPhone.",
+    "Application premium de suivi de musculation, pensee pour un usage quotidien sur iPhone.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
