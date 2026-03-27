@@ -16,10 +16,11 @@ export async function GET() {
     console.error("GET /api/state failed", error);
     return NextResponse.json(
       {
+        error: "Impossible de charger les donnees serveur.",
         data: createEmptyAppData(),
         backendConfigured: backendConfigured(),
       },
-      { status: 200 },
+      { status: 500 },
     );
   }
 }

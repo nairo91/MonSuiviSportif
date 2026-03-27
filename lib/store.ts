@@ -14,6 +14,7 @@ interface AppState extends PersistedAppData {
   isRemoteLoading: boolean;
   isSyncing: boolean;
   backendConfigured: boolean;
+  lastSyncError: string | null;
   loadRemoteState: () => Promise<void>;
   completeOnboarding: (payload: Partial<UserProfile>) => void;
   setThemePreference: (theme: PersistedAppData["preferences"]["theme"]) => void;
@@ -37,12 +38,37 @@ interface AppState extends PersistedAppData {
 }
 
 let saveTimer: number | null = null;
+const LOCAL_BACKUP_KEY = "irontrack-local-backup-v1";
+
+function readLocalBackup() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(LOCAL_BACKUP_KEY);
+    if (!raw) return null;
+    return normalizePersistedAppData(JSON.parse(raw));
+  } catch (error) {
+    console.error("Local backup read failed", error);
+    return null;
+  }
+}
+
+function writeLocalBackup(data: PersistedAppData) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.error("Local backup write failed", error);
+  }
+}
 
 function initialState(): PersistedAppData & {
   hasHydrated: boolean;
   isRemoteLoading: boolean;
   isSyncing: boolean;
   backendConfigured: boolean;
+  lastSyncError: string | null;
 } {
   return {
     ...createEmptyAppData(),
@@ -50,6 +76,7 @@ function initialState(): PersistedAppData & {
     isRemoteLoading: false,
     isSyncing: false,
     backendConfigured: false,
+    lastSyncError: null,
   };
 }
 
@@ -67,10 +94,11 @@ function snapshot(state: AppState): PersistedAppData {
 
 function scheduleRemoteSave(get: () => AppState, set: (partial: Partial<AppState>) => void) {
   if (typeof window === "undefined") return;
+  writeLocalBackup(snapshot(get()));
   if (saveTimer) window.clearTimeout(saveTimer);
 
   saveTimer = window.setTimeout(async () => {
-    set({ isSyncing: true });
+    set({ isSyncing: true, lastSyncError: null });
     try {
       const response = await fetch("/api/state", {
         method: "PUT",
@@ -80,12 +108,25 @@ function scheduleRemoteSave(get: () => AppState, set: (partial: Partial<AppState
         body: JSON.stringify(snapshot(get())),
       });
 
-      if (response.ok) {
-        const payload = await response.json();
-        set({ backendConfigured: Boolean(payload.backendConfigured) });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        set({
+          backendConfigured: Boolean(payload?.backendConfigured),
+          lastSyncError: payload?.error ?? "Echec de la sauvegarde serveur.",
+        });
+        return;
       }
+
+      set({
+        backendConfigured: Boolean(payload?.backendConfigured),
+        lastSyncError: null,
+      });
     } catch (error) {
       console.error("Remote save failed", error);
+      set({
+        lastSyncError: "Connexion au serveur impossible. Sauvegarde locale conservee.",
+      });
     } finally {
       set({ isSyncing: false });
     }
@@ -98,28 +139,60 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const state = get();
     if (state.hasHydrated || state.isRemoteLoading) return;
 
-    set({ isRemoteLoading: true });
+    const localBackup = readLocalBackup();
+    if (localBackup) {
+      set({
+        ...localBackup,
+        hasHydrated: true,
+        isRemoteLoading: true,
+      });
+    } else {
+      set({ isRemoteLoading: true });
+    }
+
     try {
       const response = await fetch("/api/state", {
         method: "GET",
         cache: "no-store",
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Echec du chargement serveur.");
+      }
+
       const normalized = normalizePersistedAppData(payload.data);
+      writeLocalBackup(normalized);
 
       set({
         ...normalized,
         hasHydrated: true,
         isRemoteLoading: false,
         backendConfigured: Boolean(payload.backendConfigured),
+        lastSyncError: null,
       });
     } catch (error) {
       console.error("Remote load failed", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Connexion au serveur impossible. Sauvegarde locale utilisee si disponible.";
+
+      if (localBackup) {
+        set({
+          hasHydrated: true,
+          isRemoteLoading: false,
+          lastSyncError: message,
+        });
+        return;
+      }
+
       set({
         ...createEmptyAppData(),
         hasHydrated: true,
         isRemoteLoading: false,
         backendConfigured: false,
+        lastSyncError: message,
       });
     }
   },

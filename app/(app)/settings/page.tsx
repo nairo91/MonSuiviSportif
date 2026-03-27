@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const lastCompletedSessionId = useAppStore((state) => state.lastCompletedSessionId);
   const backendConfigured = useAppStore((state) => state.backendConfigured);
   const isSyncing = useAppStore((state) => state.isSyncing);
+  const lastSyncError = useAppStore((state) => state.lastSyncError);
   const setThemePreference = useAppStore((state) => state.setThemePreference);
   const setUnits = useAppStore((state) => state.setUnits);
   const updateProfile = useAppStore((state) => state.updateProfile);
@@ -92,7 +93,9 @@ export default function SettingsPage() {
           <div className="rounded-[22px] border border-white/8 bg-white/4 p-4 text-sm text-muted-foreground">
             <p>Connexion base: {backendConfigured ? "configuree" : "non configuree"}</p>
             <p>Synchronisation: {isSyncing ? "en cours" : "au repos"}</p>
+            <p>Sauvegarde locale de secours: active</p>
             <p>Mode cible: sauvegarde serveur persistante des vraies seances.</p>
+            {lastSyncError ? <p className="mt-2 text-amber-300">{lastSyncError}</p> : null}
           </div>
         </CardContent>
       </Card>
