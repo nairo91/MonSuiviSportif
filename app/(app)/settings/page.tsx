@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useTheme } from "next-themes";
-import { Download, MoonStar, RotateCcw, Upload } from "lucide-react";
+import { Download, Lock, MoonStar, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const activeWorkout = useAppStore((state) => state.activeWorkout);
   const lastCompletedSessionId = useAppStore((state) => state.lastCompletedSessionId);
   const backendConfigured = useAppStore((state) => state.backendConfigured);
+  const serverRevision = useAppStore((state) => state.serverRevision);
   const isSyncing = useAppStore((state) => state.isSyncing);
   const lastSyncError = useAppStore((state) => state.lastSyncError);
   const setThemePreference = useAppStore((state) => state.setThemePreference);
@@ -92,11 +93,22 @@ export default function SettingsPage() {
           <h2 className="font-display text-xl font-semibold">Etat backend</h2>
           <div className="rounded-[22px] border border-white/8 bg-white/4 p-4 text-sm text-muted-foreground">
             <p>Connexion base: {backendConfigured ? "configuree" : "non configuree"}</p>
+            <p>Revision serveur: {serverRevision ?? "indisponible"}</p>
             <p>Synchronisation: {isSyncing ? "en cours" : "au repos"}</p>
             <p>Sauvegarde locale de secours: active</p>
             <p>Mode cible: sauvegarde serveur persistante des vraies seances.</p>
             {lastSyncError ? <p className="mt-2 text-amber-300">{lastSyncError}</p> : null}
           </div>
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              await fetch("/api/session", { method: "DELETE" });
+              window.location.reload();
+            }}
+          >
+            <Lock className="size-4" />
+            Verrouiller l&apos;app
+          </Button>
         </CardContent>
       </Card>
 

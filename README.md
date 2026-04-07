@@ -12,6 +12,7 @@ Application web premium de suivi de musculation, mobile-first, pensee pour un us
 - Lucide React
 - Recharts
 - backend Next.js via route API `/api/state`
+- session de protection via route API `/api/session`
 - stockage persistant Postgres via `DATABASE_URL`
 
 ## Demarrage
@@ -32,9 +33,13 @@ Exemple `.env.local` :
 
 ```bash
 DATABASE_URL="postgresql://..."
+APP_ACCESS_CODE="votre-code-perso"
+SESSION_SECRET="votre-cle-secrete-optionnelle"
 ```
 
 La table est creee automatiquement au premier appel sur `/api/state`.
+`APP_ACCESS_CODE` protege la version publique de l'app avec un cookie HTTP-only.
+Si `SESSION_SECRET` n'est pas defini, le code d'acces est reutilise comme cle de signature.
 
 ## Fonctionnalites
 

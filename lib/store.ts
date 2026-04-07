@@ -10,6 +10,7 @@ type GoalInput = Omit<Goal, "id" | "createdAt" | "completed"> & { id?: string };
 type QuickSetInput = Omit<WorkoutSet, "id" | "exerciseId">;
 
 interface AppState extends PersistedAppData {
+  serverRevision: number | null;
   hasHydrated: boolean;
   isRemoteLoading: boolean;
   isSyncing: boolean;
@@ -40,6 +41,7 @@ interface AppState extends PersistedAppData {
 let saveTimer: number | null = null;
 const LOCAL_BACKUP_KEY = "irontrack-local-backup-v1";
 const LOCAL_DIRTY_KEY = "irontrack-local-dirty-v1";
+const LOCAL_REVISION_KEY = "irontrack-local-revision-v1";
 
 function readLocalBackup() {
   if (typeof window === "undefined") return null;
@@ -64,6 +66,31 @@ function writeLocalBackup(data: PersistedAppData) {
   }
 }
 
+function readLocalRevision() {
+  if (typeof window === "undefined") return null;
+
+  const raw = window.localStorage.getItem(LOCAL_REVISION_KEY);
+  if (!raw) return null;
+
+  const revision = Number(raw);
+  return Number.isInteger(revision) && revision >= 0 ? revision : null;
+}
+
+function writeLocalRevision(revision: number | null) {
+  if (typeof window === "undefined") return;
+
+  try {
+    if (revision === null) {
+      window.localStorage.removeItem(LOCAL_REVISION_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(LOCAL_REVISION_KEY, String(revision));
+  } catch (error) {
+    console.error("Local revision write failed", error);
+  }
+}
+
 function readLocalDirtyFlag() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(LOCAL_DIRTY_KEY) === "1";
@@ -84,6 +111,7 @@ function writeLocalDirtyFlag(isDirty: boolean) {
 }
 
 function initialState(): PersistedAppData & {
+  serverRevision: number | null;
   hasHydrated: boolean;
   isRemoteLoading: boolean;
   isSyncing: boolean;
@@ -92,6 +120,7 @@ function initialState(): PersistedAppData & {
 } {
   return {
     ...createEmptyAppData(),
+    serverRevision: null,
     hasHydrated: false,
     isRemoteLoading: false,
     isSyncing: false,
@@ -115,10 +144,19 @@ function snapshot(state: AppState): PersistedAppData {
 async function persistSnapshot(
   data: PersistedAppData,
   set: (partial: Partial<AppState>) => void,
+  expectedRevision: number | null,
 ) {
   writeLocalBackup(data);
   writeLocalDirtyFlag(true);
   set({ isSyncing: true, lastSyncError: null });
+
+  if (expectedRevision === null) {
+    set({
+      isSyncing: false,
+      lastSyncError: "Revision serveur introuvable. Rechargez l'application.",
+    });
+    return;
+  }
 
   try {
     const response = await fetch("/api/state", {
@@ -128,12 +166,34 @@ async function persistSnapshot(
       },
       cache: "no-store",
       keepalive: true,
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        data,
+        revision: expectedRevision,
+      }),
     });
 
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
+      if (response.status === 409 && payload?.data) {
+        const latest = normalizePersistedAppData(payload.data);
+        const latestRevision =
+          typeof payload?.revision === "number" ? payload.revision : expectedRevision;
+
+        writeLocalBackup(latest);
+        writeLocalRevision(latestRevision);
+        writeLocalDirtyFlag(false);
+        set({
+          ...latest,
+          serverRevision: latestRevision,
+          backendConfigured: Boolean(payload?.backendConfigured),
+          lastSyncError:
+            payload?.error ??
+            "Une version plus recente a ete detectee. Les donnees serveur ont ete rechargees.",
+        });
+        return;
+      }
+
       set({
         backendConfigured: Boolean(payload?.backendConfigured),
         lastSyncError: payload?.error ?? "Echec de la sauvegarde serveur.",
@@ -141,11 +201,16 @@ async function persistSnapshot(
       return;
     }
 
+    const nextRevision =
+      typeof payload?.revision === "number" ? payload.revision : expectedRevision + 1;
+
     writeLocalDirtyFlag(false);
+    writeLocalRevision(nextRevision);
     if (payload?.data) {
       writeLocalBackup(normalizePersistedAppData(payload.data));
     }
     set({
+      serverRevision: nextRevision,
       backendConfigured: Boolean(payload?.backendConfigured),
       lastSyncError: null,
     });
@@ -162,14 +227,17 @@ async function persistSnapshot(
 function scheduleRemoteSave(get: () => AppState, set: (partial: Partial<AppState>) => void) {
   if (typeof window === "undefined") return;
 
-  const data = snapshot(get());
+  const state = get();
+  const data = snapshot(state);
   writeLocalBackup(data);
   writeLocalDirtyFlag(true);
+  writeLocalRevision(state.serverRevision);
 
   if (saveTimer) window.clearTimeout(saveTimer);
 
   saveTimer = window.setTimeout(() => {
-    void persistSnapshot(snapshot(get()), set);
+    const currentState = get();
+    void persistSnapshot(snapshot(currentState), set, currentState.serverRevision);
   }, 350);
 }
 
@@ -181,17 +249,19 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
     const localBackup = readLocalBackup();
     const localDirty = readLocalDirtyFlag();
+    const localRevision = readLocalRevision();
 
     if (localBackup) {
       set({
         ...localBackup,
+        serverRevision: localRevision,
         hasHydrated: true,
         isRemoteLoading: !localDirty,
       });
     }
 
-    if (localBackup && localDirty) {
-      await persistSnapshot(localBackup, set);
+    if (localBackup && localDirty && localRevision !== null) {
+      await persistSnapshot(localBackup, set, localRevision);
       set({
         hasHydrated: true,
         isRemoteLoading: false,
@@ -216,9 +286,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
       const normalized = normalizePersistedAppData(payload.data);
       writeLocalBackup(normalized);
+      writeLocalRevision(typeof payload?.revision === "number" ? payload.revision : 0);
+      writeLocalDirtyFlag(false);
 
       set({
         ...normalized,
+        serverRevision: typeof payload?.revision === "number" ? payload.revision : 0,
         hasHydrated: true,
         isRemoteLoading: false,
         backendConfigured: Boolean(payload.backendConfigured),
@@ -233,6 +306,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
       if (localBackup) {
         set({
+          serverRevision: localRevision,
           hasHydrated: true,
           isRemoteLoading: false,
           lastSyncError: message,
@@ -242,6 +316,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
       set({
         ...createEmptyAppData(),
+        serverRevision: null,
         hasHydrated: true,
         isRemoteLoading: false,
         backendConfigured: false,

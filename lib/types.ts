@@ -106,6 +106,11 @@ export interface PersistedAppData {
   lastCompletedSessionId: string | null;
 }
 
+export interface ServerStateSnapshot {
+  data: PersistedAppData;
+  revision: number;
+}
+
 export type TimeRange = "7d" | "30d" | "3m" | "1y" | "all";
 
 export interface ExerciseStats {
