@@ -13,18 +13,21 @@ import { useAppStore } from "@/lib/store";
 export default function StatisticsPage() {
   const exercises = useAppStore((state) => state.exercises);
   const sessions = useAppStore((state) => state.sessions);
+  const goals = useAppStore((state) => state.goals);
   const preferences = useAppStore((state) => state.preferences);
   const profile = useAppStore((state) => state.profile);
+  const activeWorkout = useAppStore((state) => state.activeWorkout);
+  const lastCompletedSessionId = useAppStore((state) => state.lastCompletedSessionId);
 
   const totalVolume = sessions.reduce((total, session) => total + getSessionVolume(session), 0);
   const mostPracticed = getMostPracticedExercise({
     exercises,
     sessions,
-    goals: [],
+    goals,
     preferences,
     profile,
-    activeWorkout: null,
-    lastCompletedSessionId: null,
+    activeWorkout,
+    lastCompletedSessionId,
   });
   const categoryBreakdown = getCategoryBreakdown(sessions, exercises).slice(0, 5);
   const volumeTimeline = getGlobalVolumeTimeline(sessions, "3m");

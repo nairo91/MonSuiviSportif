@@ -244,12 +244,12 @@ export default function ExerciseDetailPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Top set</p>
                   <p className="font-semibold">
-                    {formatWeight(Math.max(...entry.sets.map((set) => set.weight)), preferences.units)}
+                    {formatWeight(entry.sets.length > 0 ? Math.max(...entry.sets.map((set) => set.weight)) : 0, preferences.units)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Reps max</p>
-                  <p className="font-semibold">{Math.max(...entry.sets.map((set) => set.reps))}</p>
+                  <p className="font-semibold">{entry.sets.length > 0 ? Math.max(...entry.sets.map((set) => set.reps)) : 0}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Volume</p>

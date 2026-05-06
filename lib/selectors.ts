@@ -72,16 +72,25 @@ export function getExerciseStats(exerciseId: string, sessions: WorkoutSession[])
     };
   }
 
-  const sessionMetrics = history.map((session) => {
-    const entry = session.exerciseEntries.find((item) => item.exerciseId === exerciseId)!;
-    const topSet = [...entry.sets].sort((a, b) => b.weight - a.weight || b.reps - a.reps)[0];
+  const sessionMetrics = history
+    .map((session) => {
+      const entry = session.exerciseEntries.find((item) => item.exerciseId === exerciseId)!;
+      if (entry.sets.length === 0) return null;
+      const topSet = [...entry.sets].sort((a, b) => b.weight - a.weight || b.reps - a.reps)[0];
+      return { session, entry, topSet, volume: getEntryVolume(entry) };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  if (sessionMetrics.length === 0) {
     return {
-      session,
-      entry,
-      topSet,
-      volume: getEntryVolume(entry),
+      lastWeight: 0,
+      lastReps: 0,
+      bestWeight: 0,
+      bestVolume: 0,
+      totalSessions: history.length,
+      practiceFrequency: 0,
     };
-  });
+  }
 
   const latest = sessionMetrics[sessionMetrics.length - 1];
   const daysBetween =
@@ -181,8 +190,8 @@ export function getRecentExercises(data: PersistedAppData, limit = 5) {
 export function getExerciseTimeline(exerciseId: string, sessions: WorkoutSession[], range: TimeRange) {
   return filterSessionsByRange(getExerciseHistory(exerciseId, sessions), range).map((session) => {
     const entry = session.exerciseEntries.find((item) => item.exerciseId === exerciseId)!;
-    const topWeight = Math.max(...entry.sets.map((set) => set.weight));
-    const topReps = Math.max(...entry.sets.map((set) => set.reps));
+    const topWeight = entry.sets.length > 0 ? Math.max(...entry.sets.map((set) => set.weight)) : 0;
+    const topReps = entry.sets.length > 0 ? Math.max(...entry.sets.map((set) => set.reps)) : 0;
     return {
       date: session.startedAt,
       weight: topWeight,
@@ -238,6 +247,7 @@ export function getRecentRecords(sessions: WorkoutSession[], exercises: Exercise
     .sort((a, b) => +new Date(a.startedAt) - +new Date(b.startedAt))
     .forEach((session) => {
       session.exerciseEntries.forEach((entry) => {
+        if (entry.sets.length === 0) return;
         const topWeight = Math.max(...entry.sets.map((set) => set.weight));
         const volume = getEntryVolume(entry);
         const exerciseName = exerciseMap.get(entry.exerciseId)?.name ?? "Exercice";
@@ -285,6 +295,7 @@ export function getSessionRecords(
   });
 
   return session.exerciseEntries.flatMap((entry) => {
+    if (entry.sets.length === 0) return [];
     const weight = Math.max(...entry.sets.map((set) => set.weight));
     const volume = getEntryVolume(entry);
     const exerciseName =

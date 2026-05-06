@@ -19,38 +19,21 @@ export default function StartWorkoutPage() {
   const router = useRouter();
   const exercises = useAppStore((state) => state.exercises);
   const sessions = useAppStore((state) => state.sessions);
+  const goals = useAppStore((state) => state.goals);
+  const preferences = useAppStore((state) => state.preferences);
+  const profile = useAppStore((state) => state.profile);
   const activeWorkout = useAppStore((state) => state.activeWorkout);
-  const filter = useAppStore((state) => state.preferences.lastUsedExerciseCategoryFilter);
+  const lastCompletedSessionId = useAppStore((state) => state.lastCompletedSessionId);
+  const filter = preferences.lastUsedExerciseCategoryFilter;
   const setCategoryFilter = useAppStore((state) => state.setCategoryFilter);
   const startWorkout = useAppStore((state) => state.startWorkout);
 
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const frequent = getFrequentExercises(
-    {
-      exercises,
-      sessions,
-      goals: [],
-      preferences: { theme: "dark", lastUsedExerciseCategoryFilter: "Tous", units: "kg", onboardingCompleted: true },
-      profile: { name: "", trainingFocus: "", weeklyTarget: 4 },
-      activeWorkout: null,
-      lastCompletedSessionId: null,
-    },
-    4,
-  );
-  const recent = getRecentExercises(
-    {
-      exercises,
-      sessions,
-      goals: [],
-      preferences: { theme: "dark", lastUsedExerciseCategoryFilter: "Tous", units: "kg", onboardingCompleted: true },
-      profile: { name: "", trainingFocus: "", weeklyTarget: 4 },
-      activeWorkout: null,
-      lastCompletedSessionId: null,
-    },
-    4,
-  );
+  const storeData = { exercises, sessions, goals, preferences, profile, activeWorkout, lastCompletedSessionId };
+  const frequent = getFrequentExercises(storeData, 4);
+  const recent = getRecentExercises(storeData, 4);
 
   const filtered = useMemo(() => {
     return exercises
