@@ -17,6 +17,12 @@ export const metadata: Metadata = {
   title: "IronTrack",
   description:
     "Application premium de suivi de musculation, pensee pour un usage quotidien sur iPhone.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/app-icon.svg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
