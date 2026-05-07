@@ -284,7 +284,31 @@ export const useAppStore = create<AppState>()((set, get) => ({
         throw new Error(payload?.error ?? "Echec du chargement serveur.");
       }
 
+      const serverBackendConfigured = Boolean(payload.backendConfigured);
+      const freshLocalBackup = readLocalBackup();
+
+      // If the server has no persistent backend, local storage is the source of
+      // truth — don't overwrite the user's data with the server's empty default.
+      if (!serverBackendConfigured && freshLocalBackup) {
+        set({
+          serverRevision: 0,
+          hasHydrated: true,
+          isRemoteLoading: false,
+          backendConfigured: false,
+          lastSyncError: null,
+        });
+        return;
+      }
+
       const normalized = normalizePersistedAppData(payload.data);
+
+      // Re-read localStorage at response time to catch races (e.g. user completes
+      // onboarding while the GET is in-flight) and guard against server resets
+      // resetting onboardingCompleted for a user who has already been through it.
+      if (freshLocalBackup?.preferences?.onboardingCompleted) {
+        normalized.preferences.onboardingCompleted = true;
+      }
+
       writeLocalBackup(normalized);
       writeLocalRevision(typeof payload?.revision === "number" ? payload.revision : 0);
       writeLocalDirtyFlag(false);
@@ -294,7 +318,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         serverRevision: typeof payload?.revision === "number" ? payload.revision : 0,
         hasHydrated: true,
         isRemoteLoading: false,
-        backendConfigured: Boolean(payload.backendConfigured),
+        backendConfigured: serverBackendConfigured,
         lastSyncError: null,
       });
     } catch (error) {
