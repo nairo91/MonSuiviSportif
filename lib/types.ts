@@ -96,10 +96,46 @@ export interface ActiveWorkout {
   feeling?: number;
 }
 
+export interface PlannedSet {
+  reps: number;
+  weight: number;
+  rpe?: number;
+  notes?: string;
+}
+
+export interface PlannedExercise {
+  exerciseId: string;
+  exerciseName: string;
+  sets: PlannedSet[];
+  notes?: string;
+}
+
+export interface PlannedWorkout {
+  id: string;
+  weekNumber: number;
+  sessionNumber: number;
+  label: string;
+  focusDescription: string;
+  exercises: PlannedExercise[];
+  estimatedDurationMinutes: number;
+  completedSessionId?: string;
+}
+
+export interface TrainingPlan {
+  id: string;
+  createdAt: string;
+  goalDescription: string;
+  durationWeeks: number;
+  coachSummary: string;
+  progressionStrategy: string;
+  workouts: PlannedWorkout[];
+}
+
 export interface PersistedAppData {
   exercises: Exercise[];
   sessions: WorkoutSession[];
   goals: Goal[];
+  trainingPlan: TrainingPlan | null;
   preferences: UserPreferences;
   profile: UserProfile;
   activeWorkout: ActiveWorkout | null;

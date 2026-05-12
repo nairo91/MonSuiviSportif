@@ -59,6 +59,7 @@ export function createEmptyAppData(): PersistedAppData {
       trainingFocus: "",
       weeklyTarget: 4,
     },
+    trainingPlan: null,
     activeWorkout: null,
     lastCompletedSessionId: null,
   };
@@ -79,6 +80,7 @@ export function normalizePersistedAppData(input: Partial<PersistedAppData> | nul
       ...base.profile,
       ...(input?.profile ?? {}),
     },
+    trainingPlan: input?.trainingPlan ?? base.trainingPlan,
     activeWorkout: input?.activeWorkout ?? base.activeWorkout,
     lastCompletedSessionId:
       typeof input?.lastCompletedSessionId === "string" || input?.lastCompletedSessionId === null

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, ArrowRight, ChevronRight, Trophy } from "lucide-react";
+import { Activity, ArrowRight, Brain, ChevronRight, Sparkles, Trophy } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Progress } from "@/components/ui/progress";
@@ -11,6 +11,66 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatDateShort, formatDurationMinutes, formatRelative, formatVolume } from "@/lib/format";
 import { getGoalProgress, getGlobalVolumeTimeline, getRecentRecords, getSessionVolume, getWorkoutDurationMinutes } from "@/lib/selectors";
 import { useAppStore } from "@/lib/store";
+import { TrainingPlan } from "@/lib/types";
+
+function CoachPlanCard({ plan }: { plan: TrainingPlan }) {
+  const totalWorkouts = plan.workouts.length;
+  const completedWorkouts = plan.workouts.filter((w) => w.completedSessionId).length;
+  const completionPercent = totalWorkouts > 0 ? Math.round((completedWorkouts / totalWorkouts) * 100) : 0;
+
+  const weeksSinceStart = Math.floor((Date.now() - new Date(plan.createdAt).getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const currentWeek = Math.min(weeksSinceStart + 1, plan.durationWeeks);
+
+  const thisWeekWorkouts = plan.workouts.filter((w) => w.weekNumber === currentWeek);
+  const thisWeekDone = thisWeekWorkouts.filter((w) => w.completedSessionId).length;
+  const nextWorkout = thisWeekWorkouts.find((w) => !w.completedSessionId);
+
+  return (
+    <Link href="/coaching">
+      <Card className="glass-card border-accent/20 bg-[radial-gradient(circle_at_top_right,rgba(195,255,77,0.1),transparent_50%)] hover:border-accent/40 transition-colors cursor-pointer">
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Brain className="size-4 text-accent" />
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">Coach IA</p>
+            </div>
+            <Badge variant="outline" className="text-[10px]">
+              Sem. {currentWeek}/{plan.durationWeeks}
+            </Badge>
+          </div>
+
+          <div>
+            <p className="font-medium text-sm line-clamp-1">{plan.goalDescription}</p>
+            <div className="mt-2 space-y-1">
+              <Progress value={completionPercent} className="h-1.5" />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{completedWorkouts}/{totalWorkouts} séances</span>
+                <span className="text-accent font-medium">{completionPercent}%</span>
+              </div>
+            </div>
+          </div>
+
+          {nextWorkout ? (
+            <div className="flex items-center justify-between rounded-[16px] border border-white/8 bg-white/4 px-3 py-2">
+              <div>
+                <p className="text-xs text-muted-foreground">Prochaine séance</p>
+                <p className="text-sm font-medium">{nextWorkout.label}</p>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span>{thisWeekDone}/{thisWeekWorkouts.length} cette sem.</span>
+                <ChevronRight className="size-3" />
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[16px] border border-accent/20 bg-accent/8 px-3 py-2 text-center text-xs font-medium text-accent">
+              Semaine {currentWeek} complète !
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
 
 export default function DashboardPage() {
   const profile = useAppStore((state) => state.profile);
@@ -19,6 +79,7 @@ export default function DashboardPage() {
   const goals = useAppStore((state) => state.goals);
   const preferences = useAppStore((state) => state.preferences);
   const activeWorkout = useAppStore((state) => state.activeWorkout);
+  const trainingPlan = useAppStore((state) => state.trainingPlan);
 
   const sortedSessions = [...sessions].sort((a, b) => +new Date(b.startedAt) - +new Date(a.startedAt));
   const previousSession = sortedSessions[0];
@@ -115,6 +176,25 @@ export default function DashboardPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {trainingPlan ? (
+        <CoachPlanCard plan={trainingPlan} />
+      ) : (
+        <Link href="/coaching/generate">
+          <Card className="glass-card border-dashed border-accent/20 hover:border-accent/40 transition-colors cursor-pointer">
+            <CardContent className="flex items-center gap-3 py-4">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10">
+                <Brain className="size-5 text-accent" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm">Coach IA disponible</p>
+                <p className="text-xs text-muted-foreground">Génère un plan basé sur tes perfs</p>
+              </div>
+              <Sparkles className="size-4 text-accent shrink-0" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <StatCard label="Seances" value={String(sessions.length)} hint="total cumule" />
