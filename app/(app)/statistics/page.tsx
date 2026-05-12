@@ -24,6 +24,7 @@ export default function StatisticsPage() {
     exercises,
     sessions,
     goals,
+    trainingPlan: null,
     preferences,
     profile,
     activeWorkout,

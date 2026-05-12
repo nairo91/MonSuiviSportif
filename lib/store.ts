@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { createEmptyAppData, normalizePersistedAppData } from "@/lib/default-data";
-import { ActiveWorkout, Exercise, Goal, PersistedAppData, UserProfile, WorkoutSet } from "@/lib/types";
+import { ActiveWorkout, Exercise, Goal, PersistedAppData, TrainingPlan, UserProfile, WorkoutSet } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
 type ExerciseInput = Omit<Exercise, "id" | "createdAt">;
@@ -34,6 +34,9 @@ interface AppState extends PersistedAppData {
   updateActiveWorkoutMeta: (payload: Partial<Pick<ActiveWorkout, "notes" | "feeling">>) => void;
   finishActiveWorkout: (payload?: Partial<Pick<ActiveWorkout, "notes" | "feeling">>) => string | null;
   cancelActiveWorkout: () => void;
+  setTrainingPlan: (plan: TrainingPlan) => void;
+  markPlannedWorkoutComplete: (workoutId: string, sessionId: string) => void;
+  clearTrainingPlan: () => void;
   importData: (payload: PersistedAppData) => void;
   resetData: () => void;
 }
@@ -134,6 +137,7 @@ function snapshot(state: AppState): PersistedAppData {
     exercises: state.exercises,
     sessions: state.sessions,
     goals: state.goals,
+    trainingPlan: state.trainingPlan,
     preferences: state.preferences,
     profile: state.profile,
     activeWorkout: state.activeWorkout,
@@ -560,6 +564,28 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   cancelActiveWorkout: () => {
     set({ activeWorkout: null });
+    scheduleRemoteSave(get, set);
+  },
+  setTrainingPlan: (plan) => {
+    set({ trainingPlan: plan });
+    scheduleRemoteSave(get, set);
+  },
+  markPlannedWorkoutComplete: (workoutId, sessionId) => {
+    set((state) => {
+      if (!state.trainingPlan) return state;
+      return {
+        trainingPlan: {
+          ...state.trainingPlan,
+          workouts: state.trainingPlan.workouts.map((w) =>
+            w.id === workoutId ? { ...w, completedSessionId: sessionId } : w,
+          ),
+        },
+      };
+    });
+    scheduleRemoteSave(get, set);
+  },
+  clearTrainingPlan: () => {
+    set({ trainingPlan: null });
     scheduleRemoteSave(get, set);
   },
   importData: (payload) => {

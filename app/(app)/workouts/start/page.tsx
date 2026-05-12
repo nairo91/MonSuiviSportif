@@ -31,7 +31,7 @@ export default function StartWorkoutPage() {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const storeData = { exercises, sessions, goals, preferences, profile, activeWorkout, lastCompletedSessionId };
+  const storeData = { exercises, sessions, goals, trainingPlan: null, preferences, profile, activeWorkout, lastCompletedSessionId };
   const frequent = getFrequentExercises(storeData, 4);
   const recent = getRecentExercises(storeData, 4);
 
