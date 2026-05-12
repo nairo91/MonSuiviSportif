@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
-import { authConfigured, getSessionCookieName, validateSessionCookie } from "@/lib/server/auth";
+import { getSessionCookieName, getUserIdFromSession } from "@/lib/server/auth";
 import { uid } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -88,11 +88,9 @@ interface PlanRequestBody {
 }
 
 export async function POST(request: NextRequest) {
-  const cookieName = getSessionCookieName();
-  const sessionCookie = request.cookies.get(cookieName)?.value;
-
-  if (authConfigured() && !validateSessionCookie(sessionCookie)) {
-    return NextResponse.json({ error: "Acces non autorise." }, { status: 401 });
+  const userId = getUserIdFromSession(request.cookies.get(getSessionCookieName())?.value);
+  if (!userId) {
+    return NextResponse.json({ error: "Accès non autorisé." }, { status: 401 });
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
