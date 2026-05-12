@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, ArrowRight, Brain, ChevronRight, Sparkles, Trophy } from "lucide-react";
+import { Activity, ArrowRight, Brain, ChevronRight, Pencil, Sparkles, Trophy } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Progress } from "@/components/ui/progress";
@@ -93,13 +93,28 @@ export default function DashboardPage() {
     ? exercises.find((item) => item.id === headlineGoal.exerciseId)
     : null;
 
+  const greeting = profile.name ? `Salut ${profile.name}` : "Salut !";
+  const hasIncompleteProfile = !profile.name;
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Daily Muscle Log"
-        title={`Salut ${profile.name}`}
-        description={profile.trainingFocus}
+        title={greeting}
+        description={profile.trainingFocus || "Bienvenue sur ton carnet d'entraînement."}
       />
+
+      {hasIncompleteProfile && (
+        <Link href="/settings">
+          <div className="flex items-center gap-3 rounded-[20px] border border-accent/30 bg-accent/8 px-4 py-3 text-sm">
+            <Pencil className="size-4 shrink-0 text-accent" />
+            <p className="flex-1 text-muted-foreground">
+              Ajoute ton nom dans les réglages pour personnaliser ton expérience.
+            </p>
+            <ChevronRight className="size-4 shrink-0 text-accent" />
+          </div>
+        </Link>
+      )}
 
       <Card className="glass-card overflow-hidden bg-[radial-gradient(circle_at_top_right,_rgba(195,255,77,0.24),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(80,227,209,0.18),_transparent_28%),linear-gradient(135deg,_rgba(255,255,255,0.04),_rgba(255,255,255,0.01))]">
         <CardContent className="space-y-5">

@@ -39,6 +39,7 @@ interface AppState extends PersistedAppData {
   clearTrainingPlan: () => void;
   importData: (payload: PersistedAppData) => void;
   resetData: () => void;
+  forceSync: () => Promise<void>;
 }
 
 let saveTimer: number | null = null;
@@ -601,5 +602,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
       hasHydrated: true,
     });
     scheduleRemoteSave(get, set);
+  },
+  forceSync: async () => {
+    const state = get();
+    if (state.isSyncing) return;
+    set({ lastSyncError: null });
+    await persistSnapshot(snapshot(state), set, state.serverRevision);
   },
 }));
