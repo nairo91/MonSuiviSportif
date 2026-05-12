@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useTheme } from "next-themes";
-import { Download, Lock, MoonStar, RotateCcw, Upload } from "lucide-react";
+import { Download, LogOut, MoonStar, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -90,24 +90,26 @@ export default function SettingsPage() {
 
       <Card className="glass-card">
         <CardContent className="space-y-3">
-          <h2 className="font-display text-xl font-semibold">Etat backend</h2>
+          <h2 className="font-display text-xl font-semibold">Compte</h2>
           <div className="rounded-[22px] border border-white/8 bg-white/4 p-4 text-sm text-muted-foreground">
-            <p>Connexion base: {backendConfigured ? "configuree" : "non configuree"}</p>
-            <p>Revision serveur: {serverRevision ?? "indisponible"}</p>
-            <p>Synchronisation: {isSyncing ? "en cours" : "au repos"}</p>
-            <p>Sauvegarde locale de secours: active</p>
-            <p>Mode cible: sauvegarde serveur persistante des vraies seances.</p>
+            <p>Synchronisation cloud : {backendConfigured ? "active" : "non configuree"}</p>
+            <p>Révision serveur : {serverRevision ?? "indisponible"}</p>
+            <p>Sauvegarde locale : active</p>
+            {isSyncing ? <p className="mt-1 text-accent">Synchronisation en cours...</p> : null}
             {lastSyncError ? <p className="mt-2 text-amber-300">{lastSyncError}</p> : null}
           </div>
           <Button
             variant="secondary"
             onClick={async () => {
-              await fetch("/api/session", { method: "DELETE" });
-              window.location.reload();
+              await fetch("/api/auth/logout", { method: "POST" });
+              localStorage.removeItem("irontrack-local-backup-v1");
+              localStorage.removeItem("irontrack-local-dirty-v1");
+              localStorage.removeItem("irontrack-local-revision-v1");
+              window.location.href = "/";
             }}
           >
-            <Lock className="size-4" />
-            Verrouiller l&apos;app
+            <LogOut className="size-4" />
+            Se déconnecter
           </Button>
         </CardContent>
       </Card>

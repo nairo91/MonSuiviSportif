@@ -3,14 +3,14 @@
 import { usePathname } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { OnboardingGate } from "@/components/onboarding-gate";
-import { SessionGate } from "@/components/session-gate";
+import { AuthGate } from "@/components/auth-gate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const hideNav = pathname.startsWith("/workouts/active");
 
   return (
-    <SessionGate>
+    <AuthGate>
       <OnboardingGate>
         <div className="device-stage min-h-screen px-0 md:px-4">
           <div className="device-shell mx-auto min-h-screen w-full max-w-[430px]">
@@ -20,6 +20,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!hideNav ? <BottomNav /> : null}
         </div>
       </OnboardingGate>
-    </SessionGate>
+    </AuthGate>
   );
 }

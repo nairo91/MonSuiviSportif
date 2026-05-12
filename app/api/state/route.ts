@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createEmptyAppData, normalizePersistedAppData } from "@/lib/default-data";
-import { authConfigured, getSessionCookieName, validateSessionCookie } from "@/lib/server/auth";
+import { getSessionCookieName, getUserIdFromSession } from "@/lib/server/auth";
 import {
   AppStateConflictError,
   backendConfigured,
@@ -14,48 +14,34 @@ export const dynamic = "force-dynamic";
 function unauthorizedResponse() {
   return NextResponse.json(
     {
-      error: "Acces non autorise.",
+      error: "Accès non autorisé.",
       backendConfigured: backendConfigured(),
     },
     { status: 401 },
   );
 }
 
-function misconfiguredResponse() {
-  return NextResponse.json(
-    {
-      error: "APP_ACCESS_CODE doit etre configure cote serveur.",
-      backendConfigured: backendConfigured(),
-    },
-    { status: 503 },
-  );
-}
-
-function isAuthorized(request: NextRequest) {
-  return validateSessionCookie(request.cookies.get(getSessionCookieName())?.value);
+function getAuthenticatedUserId(request: NextRequest): string | null {
+  return getUserIdFromSession(request.cookies.get(getSessionCookieName())?.value);
 }
 
 export async function GET(request: NextRequest) {
-  if (!authConfigured()) {
-    return misconfiguredResponse();
-  }
-
-  if (!isAuthorized(request)) {
-    return unauthorizedResponse();
-  }
+  const userId = getAuthenticatedUserId(request);
+  if (!userId) return unauthorizedResponse();
 
   try {
-    const snapshot = await loadAppState();
+    const snapshot = await loadAppState(userId);
     return NextResponse.json({
       data: snapshot.data,
       revision: snapshot.revision,
       backendConfigured: backendConfigured(),
+      userId,
     });
   } catch (error) {
     console.error("GET /api/state failed", error);
     return NextResponse.json(
       {
-        error: "Impossible de charger les donnees serveur.",
+        error: "Impossible de charger les données serveur.",
         data: createEmptyAppData(),
         backendConfigured: backendConfigured(),
       },
@@ -65,13 +51,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!authConfigured()) {
-    return misconfiguredResponse();
-  }
-
-  if (!isAuthorized(request)) {
-    return unauthorizedResponse();
-  }
+  const userId = getAuthenticatedUserId(request);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const body = await request.json();
@@ -80,7 +61,7 @@ export async function PUT(request: NextRequest) {
     if (revision === null) {
       return NextResponse.json(
         {
-          error: "Revision serveur manquante.",
+          error: "Révision serveur manquante.",
           backendConfigured: backendConfigured(),
         },
         { status: 400 },
@@ -88,7 +69,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const normalized = normalizePersistedAppData(body?.data);
-    const snapshot = await saveAppState(normalized, revision);
+    const snapshot = await saveAppState(normalized, userId, revision);
 
     return NextResponse.json({
       data: snapshot.data,
@@ -99,7 +80,7 @@ export async function PUT(request: NextRequest) {
     if (error instanceof AppStateConflictError) {
       return NextResponse.json(
         {
-          error: "Une version plus recente existe deja. Donnees serveur rechargees.",
+          error: "Une version plus récente existe déjà. Données serveur rechargées.",
           data: error.latest.data,
           revision: error.latest.revision,
           backendConfigured: backendConfigured(),
@@ -111,7 +92,7 @@ export async function PUT(request: NextRequest) {
     console.error("PUT /api/state failed", error);
     return NextResponse.json(
       {
-        error: "Impossible d'enregistrer les donnees serveur.",
+        error: "Impossible d'enregistrer les données serveur.",
         backendConfigured: backendConfigured(),
       },
       { status: 500 },

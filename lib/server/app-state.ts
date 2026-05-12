@@ -7,23 +7,23 @@ async function ensureTable() {
   if (!sql) return null;
 
   await sql`
-    create table if not exists app_state (
-      id text primary key,
-      state jsonb not null,
-      revision integer not null default 0,
-      updated_at timestamptz not null default timezone('utc', now())
+    CREATE TABLE IF NOT EXISTS app_state (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      state JSONB NOT NULL,
+      revision INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc', NOW())
     )
   `;
 
   await sql`
-    alter table app_state
-    add column if not exists revision integer not null default 0
+    CREATE UNIQUE INDEX IF NOT EXISTS app_state_user_id_idx ON app_state (user_id)
   `;
 
   return sql;
 }
 
-async function ensureDefaultRow() {
+async function ensureUserRow(userId: string) {
   const sql = await ensureTable();
   if (!sql) return null;
 
@@ -31,10 +31,10 @@ async function ensureDefaultRow() {
   const payload = JSON.stringify(initial);
 
   await sql`
-    insert into app_state (id, state, revision, updated_at)
-    values ('default', ${payload}::jsonb, 0, timezone('utc', now()))
-    on conflict (id)
-    do nothing
+    INSERT INTO app_state (id, user_id, state, revision, updated_at)
+    VALUES (${userId}, ${userId}, ${payload}::jsonb, 0, TIMEZONE('utc', NOW()))
+    ON CONFLICT (user_id)
+    DO NOTHING
   `;
 
   return sql;
@@ -53,8 +53,8 @@ export class AppStateConflictError extends Error {
   }
 }
 
-export async function loadAppState(): Promise<ServerStateSnapshot> {
-  const sql = await ensureDefaultRow();
+export async function loadAppState(userId: string): Promise<ServerStateSnapshot> {
+  const sql = await ensureUserRow(userId);
   if (!sql) {
     return {
       data: createEmptyAppData(),
@@ -63,10 +63,10 @@ export async function loadAppState(): Promise<ServerStateSnapshot> {
   }
 
   const rows = await sql<{ state: PersistedAppData; revision: number }[]>`
-    select state, revision
-    from app_state
-    where id = 'default'
-    limit 1
+    SELECT state, revision
+    FROM app_state
+    WHERE user_id = ${userId}
+    LIMIT 1
   `;
 
   if (rows.length === 0) {
@@ -82,28 +82,32 @@ export async function loadAppState(): Promise<ServerStateSnapshot> {
   };
 }
 
-export async function saveAppState(state: PersistedAppData, expectedRevision: number) {
-  const sql = await ensureDefaultRow();
+export async function saveAppState(
+  state: PersistedAppData,
+  userId: string,
+  expectedRevision: number,
+) {
+  const sql = await ensureUserRow(userId);
   if (!sql) {
-    throw new Error("DATABASE_URL is missing.");
+    throw new Error("DATABASE_URL est requis pour sauvegarder les données.");
   }
 
   const normalized = normalizePersistedAppData(state);
   const payload = JSON.stringify(normalized);
 
   const rows = await sql<{ revision: number }[]>`
-    update app_state
-    set
+    UPDATE app_state
+    SET
       state = ${payload}::jsonb,
       revision = revision + 1,
-      updated_at = timezone('utc', now())
-    where id = 'default'
-      and revision = ${expectedRevision}
-    returning revision
+      updated_at = TIMEZONE('utc', NOW())
+    WHERE user_id = ${userId}
+      AND revision = ${expectedRevision}
+    RETURNING revision
   `;
 
   if (rows.length === 0) {
-    throw new AppStateConflictError(await loadAppState());
+    throw new AppStateConflictError(await loadAppState(userId));
   }
 
   return {
