@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useTheme } from "next-themes";
-import { Download, LogOut, MoonStar, RotateCcw, Upload } from "lucide-react";
+import { Download, LogOut, MoonStar, RefreshCw, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ export default function SettingsPage() {
   const updateProfile = useAppStore((state) => state.updateProfile);
   const importData = useAppStore((state) => state.importData);
   const resetData = useAppStore((state) => state.resetData);
+  const forceSync = useAppStore((state) => state.forceSync);
 
   const exportData = () => {
     const payload = {
@@ -91,12 +92,38 @@ export default function SettingsPage() {
       <Card className="glass-card">
         <CardContent className="space-y-3">
           <h2 className="font-display text-xl font-semibold">Compte</h2>
-          <div className="rounded-[22px] border border-white/8 bg-white/4 p-4 text-sm text-muted-foreground">
-            <p>Synchronisation cloud : {backendConfigured ? "active" : "non configuree"}</p>
-            <p>Révision serveur : {serverRevision ?? "indisponible"}</p>
-            <p>Sauvegarde locale : active</p>
-            {isSyncing ? <p className="mt-1 text-accent">Synchronisation en cours...</p> : null}
-            {lastSyncError ? <p className="mt-2 text-amber-300">{lastSyncError}</p> : null}
+          <div className="rounded-[22px] border border-white/8 bg-white/4 p-4 text-sm text-muted-foreground space-y-1">
+            <div className="flex items-center justify-between">
+              <span>Synchronisation cloud</span>
+              <span className={backendConfigured ? "text-emerald-400" : "text-muted-foreground"}>
+                {backendConfigured ? "active" : "non configuree"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Révision serveur</span>
+              <span>{serverRevision ?? "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Sauvegarde locale</span>
+              <span className="text-emerald-400">active</span>
+            </div>
+            {isSyncing ? (
+              <p className="pt-1 text-accent">Synchronisation en cours...</p>
+            ) : null}
+            {lastSyncError ? (
+              <div className="pt-2 space-y-2">
+                <p className="text-amber-300">{lastSyncError}</p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => void forceSync()}
+                >
+                  <RefreshCw className="size-3" />
+                  Réessayer la synchronisation
+                </Button>
+              </div>
+            ) : null}
           </div>
           <Button
             variant="secondary"
