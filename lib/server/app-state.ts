@@ -28,11 +28,10 @@ async function ensureUserRow(userId: string) {
   if (!sql) return null;
 
   const initial = createEmptyAppData();
-  const payload = JSON.stringify(initial);
 
   await sql`
     INSERT INTO app_state (id, user_id, state, revision, updated_at)
-    VALUES (${userId}, ${userId}, ${payload}::jsonb, 0, TIMEZONE('utc', NOW()))
+    VALUES (${userId}, ${userId}, ${sql.json(initial)}, 0, TIMEZONE('utc', NOW()))
     ON CONFLICT (user_id)
     DO NOTHING
   `;
@@ -53,6 +52,20 @@ export class AppStateConflictError extends Error {
   }
 }
 
+// Répare les lignes historiques où le state a été stocké double-encodé
+// (chaîne JSON dans le JSONB au lieu d'un objet). Voir docs/ETAT-DES-LIEUX-PHASE0.md §3.
+function parseStoredState(raw: unknown): Partial<PersistedAppData> | null {
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === "object" && parsed !== null ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof raw === "object" && raw !== null ? (raw as Partial<PersistedAppData>) : null;
+}
+
 export async function loadAppState(userId: string): Promise<ServerStateSnapshot> {
   const sql = await ensureUserRow(userId);
   if (!sql) {
@@ -62,7 +75,7 @@ export async function loadAppState(userId: string): Promise<ServerStateSnapshot>
     };
   }
 
-  const rows = await sql<{ state: PersistedAppData; revision: number }[]>`
+  const rows = await sql<{ state: unknown; revision: number }[]>`
     SELECT state, revision
     FROM app_state
     WHERE user_id = ${userId}
@@ -77,7 +90,7 @@ export async function loadAppState(userId: string): Promise<ServerStateSnapshot>
   }
 
   return {
-    data: normalizePersistedAppData(rows[0].state),
+    data: normalizePersistedAppData(parseStoredState(rows[0].state)),
     revision: rows[0].revision,
   };
 }
@@ -93,12 +106,11 @@ export async function saveAppState(
   }
 
   const normalized = normalizePersistedAppData(state);
-  const payload = JSON.stringify(normalized);
 
   const rows = await sql<{ revision: number }[]>`
     UPDATE app_state
     SET
-      state = ${payload}::jsonb,
+      state = ${sql.json(normalized)},
       revision = revision + 1,
       updated_at = TIMEZONE('utc', NOW())
     WHERE user_id = ${userId}
