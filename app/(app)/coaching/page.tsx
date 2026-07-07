@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -8,11 +9,11 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   Circle,
   Clock,
   Dumbbell,
+  Play,
   Plus,
   Sparkles,
   Target,
@@ -94,8 +95,8 @@ function WorkoutCard({
                 className="flex-1 h-8 text-xs"
                 onClick={() => onMarkDone(workout)}
               >
-                <CheckCircle2 className="size-3" />
-                Marquer fait
+                <Play className="size-3" />
+                Démarrer
               </Button>
               <Button
                 variant="ghost"
@@ -147,11 +148,13 @@ function WorkoutCard({
 }
 
 export default function CoachingPage() {
+  const router = useRouter();
   const trainingPlan = useAppStore((state) => state.trainingPlan);
-  const sessions = useAppStore((state) => state.sessions);
+  const activeWorkout = useAppStore((state) => state.activeWorkout);
   const markPlannedWorkoutComplete = useAppStore((state) => state.markPlannedWorkoutComplete);
   const clearTrainingPlan = useAppStore((state) => state.clearTrainingPlan);
-  const startWorkout = useAppStore((state) => state.startWorkout);
+  const startWorkoutFromPlan = useAppStore((state) => state.startWorkoutFromPlan);
+  const cancelActiveWorkout = useAppStore((state) => state.cancelActiveWorkout);
 
   const [confirmClear, setConfirmClear] = useState(false);
   const [pendingMarkDone, setPendingMarkDone] = useState<PlannedWorkout | null>(null);
@@ -244,17 +247,25 @@ export default function CoachingPage() {
     setPendingMarkDone(workout);
   }
 
-  function confirmMarkDone() {
+  function startPlannedWorkout(replaceActive = false) {
     if (!pendingMarkDone) return;
 
-    const exerciseIds = pendingMarkDone.exercises.map((e) => e.exerciseId);
-    const workoutId = startWorkout(exerciseIds);
-    const latestSession = [...sessions].sort(
-      (a, b) => +new Date(b.startedAt) - +new Date(a.startedAt),
-    )[0];
+    if (replaceActive) cancelActiveWorkout();
 
-    const sessionId = workoutId ?? latestSession?.id ?? "manual";
-    markPlannedWorkoutComplete(pendingMarkDone.id, sessionId);
+    const workoutId = startWorkoutFromPlan(pendingMarkDone);
+    if (!workoutId) {
+      toast.error("Cette séance ne contient aucun exercice.");
+      return;
+    }
+
+    setPendingMarkDone(null);
+    toast.success("Séance démarrée, bonnes séries !");
+    router.push("/workouts/active");
+  }
+
+  function markDoneWithoutSession() {
+    if (!pendingMarkDone) return;
+    markPlannedWorkoutComplete(pendingMarkDone.id, "manual");
     setPendingMarkDone(null);
     toast.success("Séance marquée comme effectuée !");
   }
@@ -399,22 +410,53 @@ export default function CoachingPage() {
 
       <Dialog open={pendingMarkDone !== null} onOpenChange={(open) => !open && setPendingMarkDone(null)}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Séance réalisée ?</DialogTitle>
-            <DialogDescription>
-              Confirme que tu as effectué "{pendingMarkDone?.label}". Cela démarrera aussi une séance
-              dans ton historique.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-3 mt-4">
-            <Button variant="secondary" className="flex-1" onClick={() => setPendingMarkDone(null)}>
-              Annuler
-            </Button>
-            <Button className="flex-1" onClick={confirmMarkDone}>
-              <CheckCircle2 className="size-4" />
-              Confirmer
-            </Button>
-          </div>
+          {activeWorkout ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Une séance est déjà en cours</DialogTitle>
+                <DialogDescription>
+                  Termine ou remplace ta séance en cours avant de lancer «&nbsp;{pendingMarkDone?.label}&nbsp;».
+                  Si tu la remplaces, ses séries non terminées seront perdues.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-2 mt-4">
+                <Button onClick={() => router.push("/workouts/active")}>
+                  <ArrowRight className="size-4" />
+                  Reprendre la séance en cours
+                </Button>
+                <Button variant="secondary" onClick={() => startPlannedWorkout(true)}>
+                  <Play className="size-4" />
+                  La remplacer par «&nbsp;{pendingMarkDone?.label}&nbsp;»
+                </Button>
+                <Button variant="ghost" onClick={() => setPendingMarkDone(null)}>
+                  Annuler
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Lancer «&nbsp;{pendingMarkDone?.label}&nbsp;» ?</DialogTitle>
+                <DialogDescription>
+                  Les séries planifiées par le coach (poids × reps) seront pré-remplies. La séance
+                  sera marquée comme faite quand tu la termineras.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-2 mt-4">
+                <Button onClick={() => startPlannedWorkout()}>
+                  <Play className="size-4" />
+                  Démarrer la séance
+                </Button>
+                <Button variant="secondary" onClick={markDoneWithoutSession}>
+                  <CheckCircle2 className="size-4" />
+                  Déjà faite, marquer sans séance
+                </Button>
+                <Button variant="ghost" onClick={() => setPendingMarkDone(null)}>
+                  Annuler
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

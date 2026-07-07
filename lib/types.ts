@@ -94,6 +94,8 @@ export interface ActiveWorkout {
   exerciseEntries: WorkoutExerciseEntry[];
   notes: string;
   feeling?: number;
+  /** Séance du plan coach dont est issue cette séance (complétée au finish). */
+  plannedWorkoutId?: string;
 }
 
 export interface PlannedSet {

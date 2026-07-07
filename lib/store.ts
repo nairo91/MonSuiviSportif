@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { createEmptyAppData, normalizePersistedAppData } from "@/lib/default-data";
-import { ActiveWorkout, Exercise, Goal, PersistedAppData, TrainingPlan, UserProfile, WorkoutSet } from "@/lib/types";
+import { ActiveWorkout, Exercise, Goal, PersistedAppData, PlannedWorkout, TrainingPlan, UserProfile, WorkoutSet } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { mergeAppData } from "@/lib/merge";
 
@@ -29,6 +29,7 @@ interface AppState extends PersistedAppData {
   upsertGoal: (payload: GoalInput) => void;
   deleteGoal: (goalId: string) => void;
   startWorkout: (exerciseIds: string[]) => string | null;
+  startWorkoutFromPlan: (workout: PlannedWorkout) => string | null;
   addExerciseToActiveWorkout: (exerciseId: string) => void;
   addSetToActiveWorkout: (exerciseId: string, payload: QuickSetInput) => void;
   removeSetFromActiveWorkout: (exerciseId: string, setId: string) => void;
@@ -552,6 +553,36 @@ export const useAppStore = create<AppState>()((set, get) => ({
     scheduleRemoteSave(get, set);
     return workoutId;
   },
+  startWorkoutFromPlan: (workout) => {
+    const exercises = workout.exercises.filter((planned) => Boolean(planned.exerciseId));
+    if (exercises.length === 0) return null;
+
+    const workoutId = uid("workout");
+    set({
+      activeWorkout: {
+        id: workoutId,
+        startedAt: new Date().toISOString(),
+        plannedWorkoutId: workout.id,
+        exerciseEntries: exercises.map((planned) => ({
+          id: uid("entry"),
+          exerciseId: planned.exerciseId,
+          // Pré-remplit les séries planifiées (poids/reps du coach) ;
+          // l'utilisateur les ajuste pendant la séance.
+          sets: planned.sets.map((plannedSet) => ({
+            id: uid("set"),
+            exerciseId: planned.exerciseId,
+            weight: plannedSet.weight,
+            reps: plannedSet.reps,
+            ...(plannedSet.rpe !== undefined ? { rpe: plannedSet.rpe } : {}),
+          })),
+        })),
+        notes: "",
+        feeling: 8,
+      },
+    });
+    scheduleRemoteSave(get, set);
+    return workoutId;
+  },
   addExerciseToActiveWorkout: (exerciseId) => {
     set((state) => {
       if (!state.activeWorkout) return state;
@@ -639,10 +670,22 @@ export const useAppStore = create<AppState>()((set, get) => ({
       feeling: payload?.feeling ?? state.activeWorkout.feeling,
     };
 
+    const plannedWorkoutId = state.activeWorkout.plannedWorkoutId;
     set({
       sessions: [session, ...state.sessions],
       activeWorkout: null,
       lastCompletedSessionId: sessionId,
+      // Si la séance venait du plan coach, on la marque « faite » avec le
+      // vrai sessionId — c'est ici (et seulement ici) que le plan avance.
+      trainingPlan:
+        plannedWorkoutId && state.trainingPlan
+          ? {
+              ...state.trainingPlan,
+              workouts: state.trainingPlan.workouts.map((w) =>
+                w.id === plannedWorkoutId ? { ...w, completedSessionId: sessionId } : w,
+              ),
+            }
+          : state.trainingPlan,
     });
     scheduleRemoteSave(get, set);
     return sessionId;
