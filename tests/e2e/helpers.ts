@@ -20,6 +20,7 @@ export async function registerAndOnboard(page: Page, email: string) {
   await expect(page.getByRole("button", { name: "Ouvrir mon espace" })).toBeVisible();
   await page.getByRole("button", { name: "Ouvrir mon espace" }).click();
 
-  // Dashboard visible
-  await expect(page.getByText("IronTrack").first()).toBeVisible();
+  // Dashboard visible (eyebrow du header + nav basse)
+  await expect(page.getByText("Daily Muscle Log")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Exercices" })).toBeVisible();
 }
