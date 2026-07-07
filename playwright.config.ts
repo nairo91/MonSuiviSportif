@@ -10,7 +10,10 @@ export default defineConfig({
   timeout: 45_000,
   use: {
     baseURL: "http://localhost:3000",
+    // Émulation iPhone mais moteur Chromium : le device iPhone 13 pointe sur
+    // WebKit par défaut, or seul Chromium est installé en CI.
     ...devices["iPhone 13"],
+    browserName: "chromium",
     trace: "retain-on-failure",
   },
   webServer: {
