@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookieName, getUserIdFromSession } from "@/lib/server/auth";
+import { isAdminEmail } from "@/lib/server/admin";
+import { getUserById } from "@/lib/server/users";
 import { uid } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -91,6 +93,14 @@ export async function POST(request: NextRequest) {
   const userId = getUserIdFromSession(request.cookies.get(getSessionCookieName())?.value);
   if (!userId) {
     return NextResponse.json({ error: "Accès non autorisé." }, { status: 401 });
+  }
+
+  const user = await getUserById(userId);
+  if (!isAdminEmail(user?.email)) {
+    return NextResponse.json(
+      { error: "La génération de plan IA est réservée aux administrateurs." },
+      { status: 403 },
+    );
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {

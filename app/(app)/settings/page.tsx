@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatNumber } from "@/lib/utils";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, clearActiveUserLocalData } from "@/lib/store";
 
 export default function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -129,9 +129,7 @@ export default function SettingsPage() {
             variant="secondary"
             onClick={async () => {
               await fetch("/api/auth/logout", { method: "POST" });
-              localStorage.removeItem("irontrack-local-backup-v1");
-              localStorage.removeItem("irontrack-local-dirty-v1");
-              localStorage.removeItem("irontrack-local-revision-v1");
+              clearActiveUserLocalData();
               window.location.href = "/";
             }}
           >

@@ -2,8 +2,9 @@
 
 import { create } from "zustand";
 import { createEmptyAppData, normalizePersistedAppData } from "@/lib/default-data";
-import { ActiveWorkout, Exercise, Goal, PersistedAppData, TrainingPlan, UserProfile, WorkoutSet } from "@/lib/types";
+import { ActiveWorkout, Exercise, Goal, PersistedAppData, PlannedWorkout, TrainingPlan, UserProfile, WorkoutSet } from "@/lib/types";
 import { uid } from "@/lib/utils";
+import { mergeAppData } from "@/lib/merge";
 
 type ExerciseInput = Omit<Exercise, "id" | "createdAt">;
 type GoalInput = Omit<Goal, "id" | "createdAt" | "completed"> & { id?: string };
@@ -28,6 +29,7 @@ interface AppState extends PersistedAppData {
   upsertGoal: (payload: GoalInput) => void;
   deleteGoal: (goalId: string) => void;
   startWorkout: (exerciseIds: string[]) => string | null;
+  startWorkoutFromPlan: (workout: PlannedWorkout) => string | null;
   addExerciseToActiveWorkout: (exerciseId: string) => void;
   addSetToActiveWorkout: (exerciseId: string, payload: QuickSetInput) => void;
   removeSetFromActiveWorkout: (exerciseId: string, setId: string) => void;
@@ -46,12 +48,59 @@ let saveTimer: number | null = null;
 const LOCAL_BACKUP_KEY = "irontrack-local-backup-v1";
 const LOCAL_DIRTY_KEY = "irontrack-local-dirty-v1";
 const LOCAL_REVISION_KEY = "irontrack-local-revision-v1";
+const LAST_USER_KEY = "irontrack-last-user-v1";
+const LOCAL_KEYS = [LOCAL_BACKUP_KEY, LOCAL_DIRTY_KEY, LOCAL_REVISION_KEY];
+
+// Namespace des clés localStorage par utilisateur : évite qu'un compte
+// affiche ou pousse le backup local d'un autre compte sur la même machine.
+let activeUserId: string | null = null;
+
+function storageKey(base: string) {
+  return activeUserId ? `${base}:${activeUserId}` : base;
+}
+
+export function setActiveUser(userId: string | null) {
+  activeUserId = userId;
+  if (typeof window === "undefined" || !userId) return;
+
+  try {
+    const lastUser = window.localStorage.getItem(LAST_USER_KEY);
+    if (lastUser !== userId) {
+      for (const base of LOCAL_KEYS) {
+        const legacyValue = window.localStorage.getItem(base);
+        // Migration des anciennes clés globales vers le premier utilisateur connu,
+        // sinon on les supprime (elles appartiennent à un autre compte).
+        if (legacyValue !== null && !lastUser) {
+          window.localStorage.setItem(`${base}:${userId}`, legacyValue);
+        }
+        window.localStorage.removeItem(base);
+      }
+      window.localStorage.setItem(LAST_USER_KEY, userId);
+    }
+  } catch (error) {
+    console.error("setActiveUser failed", error);
+  }
+}
+
+export function clearActiveUserLocalData() {
+  if (typeof window === "undefined") return;
+
+  try {
+    for (const base of LOCAL_KEYS) {
+      window.localStorage.removeItem(storageKey(base));
+      window.localStorage.removeItem(base);
+    }
+    window.localStorage.removeItem(LAST_USER_KEY);
+  } catch (error) {
+    console.error("clearActiveUserLocalData failed", error);
+  }
+}
 
 function readLocalBackup() {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.localStorage.getItem(LOCAL_BACKUP_KEY);
+    const raw = window.localStorage.getItem(storageKey(LOCAL_BACKUP_KEY));
     if (!raw) return null;
     return normalizePersistedAppData(JSON.parse(raw));
   } catch (error) {
@@ -64,7 +113,7 @@ function writeLocalBackup(data: PersistedAppData) {
   if (typeof window === "undefined") return;
 
   try {
-    window.localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(data));
+    window.localStorage.setItem(storageKey(LOCAL_BACKUP_KEY), JSON.stringify(data));
   } catch (error) {
     console.error("Local backup write failed", error);
   }
@@ -73,7 +122,7 @@ function writeLocalBackup(data: PersistedAppData) {
 function readLocalRevision() {
   if (typeof window === "undefined") return null;
 
-  const raw = window.localStorage.getItem(LOCAL_REVISION_KEY);
+  const raw = window.localStorage.getItem(storageKey(LOCAL_REVISION_KEY));
   if (!raw) return null;
 
   const revision = Number(raw);
@@ -85,11 +134,11 @@ function writeLocalRevision(revision: number | null) {
 
   try {
     if (revision === null) {
-      window.localStorage.removeItem(LOCAL_REVISION_KEY);
+      window.localStorage.removeItem(storageKey(LOCAL_REVISION_KEY));
       return;
     }
 
-    window.localStorage.setItem(LOCAL_REVISION_KEY, String(revision));
+    window.localStorage.setItem(storageKey(LOCAL_REVISION_KEY), String(revision));
   } catch (error) {
     console.error("Local revision write failed", error);
   }
@@ -97,7 +146,7 @@ function writeLocalRevision(revision: number | null) {
 
 function readLocalDirtyFlag() {
   if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(LOCAL_DIRTY_KEY) === "1";
+  return window.localStorage.getItem(storageKey(LOCAL_DIRTY_KEY)) === "1";
 }
 
 function writeLocalDirtyFlag(isDirty: boolean) {
@@ -105,9 +154,9 @@ function writeLocalDirtyFlag(isDirty: boolean) {
 
   try {
     if (isDirty) {
-      window.localStorage.setItem(LOCAL_DIRTY_KEY, "1");
+      window.localStorage.setItem(storageKey(LOCAL_DIRTY_KEY), "1");
     } else {
-      window.localStorage.removeItem(LOCAL_DIRTY_KEY);
+      window.localStorage.removeItem(storageKey(LOCAL_DIRTY_KEY));
     }
   } catch (error) {
     console.error("Local dirty flag write failed", error);
@@ -150,6 +199,7 @@ async function persistSnapshot(
   data: PersistedAppData,
   set: (partial: Partial<AppState>) => void,
   expectedRevision: number | null,
+  hasRetriedAfterConflict = false,
 ) {
   writeLocalBackup(data);
   writeLocalDirtyFlag(true);
@@ -158,7 +208,7 @@ async function persistSnapshot(
   if (expectedRevision === null) {
     set({
       isSyncing: false,
-      lastSyncError: "Revision serveur introuvable. Rechargez l'application.",
+      lastSyncError: "Révision serveur introuvable. Rechargez l'application.",
     });
     return;
   }
@@ -185,6 +235,22 @@ async function persistSnapshot(
         const latestRevision =
           typeof payload?.revision === "number" ? payload.revision : expectedRevision;
 
+        if (!hasRetriedAfterConflict && latestRevision !== null) {
+          // Conflit de révision : on fusionne les modifications locales avec
+          // l'état serveur puis on retente une fois, au lieu de jeter le local.
+          const merged = mergeAppData(data, latest);
+          writeLocalBackup(merged);
+          writeLocalRevision(latestRevision);
+          set({
+            ...merged,
+            serverRevision: latestRevision,
+            backendConfigured: Boolean(payload?.backendConfigured),
+          });
+          await persistSnapshot(merged, set, latestRevision, true);
+          return;
+        }
+
+        // Deuxième conflit d'affilée : l'état serveur fait autorité.
         writeLocalBackup(latest);
         writeLocalRevision(latestRevision);
         writeLocalDirtyFlag(false);
@@ -194,14 +260,14 @@ async function persistSnapshot(
           backendConfigured: Boolean(payload?.backendConfigured),
           lastSyncError:
             payload?.error ??
-            "Une version plus recente a ete detectee. Les donnees serveur ont ete rechargees.",
+            "Une version plus récente a été détectée. Les données serveur ont été rechargées.",
         });
         return;
       }
 
       set({
         backendConfigured: Boolean(payload?.backendConfigured),
-        lastSyncError: payload?.error ?? "Echec de la sauvegarde serveur.",
+        lastSyncError: payload?.error ?? "Échec de la sauvegarde serveur.",
       });
       return;
     }
@@ -222,11 +288,27 @@ async function persistSnapshot(
   } catch (error) {
     console.error("Remote save failed", error);
     set({
-      lastSyncError: "Connexion au serveur impossible. Sauvegarde locale conservee.",
+      lastSyncError: "Connexion au serveur impossible. Sauvegarde locale conservée.",
     });
   } finally {
     set({ isSyncing: false });
   }
+}
+
+let onlineListenerRegistered = false;
+
+// À la reconnexion réseau, re-pousse automatiquement le backup local
+// s'il reste des modifications non synchronisées.
+function registerOnlineRetry(get: () => AppState, set: (partial: Partial<AppState>) => void) {
+  if (typeof window === "undefined" || onlineListenerRegistered) return;
+  onlineListenerRegistered = true;
+
+  window.addEventListener("online", () => {
+    const state = get();
+    if (readLocalDirtyFlag() && !state.isSyncing) {
+      void persistSnapshot(snapshot(state), set, state.serverRevision);
+    }
+  });
 }
 
 function scheduleRemoteSave(get: () => AppState, set: (partial: Partial<AppState>) => void) {
@@ -251,6 +333,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   loadRemoteState: async () => {
     const state = get();
     if (state.hasHydrated || state.isRemoteLoading) return;
+    registerOnlineRetry(get, set);
 
     const localBackup = readLocalBackup();
     const localDirty = readLocalDirtyFlag();
@@ -286,7 +369,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(payload?.error ?? "Echec du chargement serveur.");
+        throw new Error(payload?.error ?? "Échec du chargement serveur.");
       }
 
       const serverBackendConfigured = Boolean(payload.backendConfigured);
@@ -305,12 +388,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
         return;
       }
 
-      const normalized = normalizePersistedAppData(payload.data);
+      let normalized = normalizePersistedAppData(payload.data);
 
-      // Re-read localStorage at response time to catch races (e.g. user completes
-      // onboarding while the GET is in-flight) and guard against server resets
-      // resetting onboardingCompleted for a user who has already been through it.
-      if (freshLocalBackup?.preferences?.onboardingCompleted) {
+      // Relecture du localStorage à la réception pour attraper les races
+      // (modification pendant le GET en vol) : si des changements locaux non
+      // synchronisés existent, on fusionne au lieu d'écraser.
+      if (freshLocalBackup && readLocalDirtyFlag()) {
+        normalized = mergeAppData(freshLocalBackup, normalized);
+      } else if (freshLocalBackup?.preferences?.onboardingCompleted) {
         normalized.preferences.onboardingCompleted = true;
       }
 
@@ -331,7 +416,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       const message =
         error instanceof Error
           ? error.message
-          : "Connexion au serveur impossible. Sauvegarde locale utilisee si disponible.";
+          : "Connexion au serveur impossible. Sauvegarde locale utilisée si disponible.";
 
       if (localBackup) {
         set({
@@ -468,6 +553,36 @@ export const useAppStore = create<AppState>()((set, get) => ({
     scheduleRemoteSave(get, set);
     return workoutId;
   },
+  startWorkoutFromPlan: (workout) => {
+    const exercises = workout.exercises.filter((planned) => Boolean(planned.exerciseId));
+    if (exercises.length === 0) return null;
+
+    const workoutId = uid("workout");
+    set({
+      activeWorkout: {
+        id: workoutId,
+        startedAt: new Date().toISOString(),
+        plannedWorkoutId: workout.id,
+        exerciseEntries: exercises.map((planned) => ({
+          id: uid("entry"),
+          exerciseId: planned.exerciseId,
+          // Pré-remplit les séries planifiées (poids/reps du coach) ;
+          // l'utilisateur les ajuste pendant la séance.
+          sets: planned.sets.map((plannedSet) => ({
+            id: uid("set"),
+            exerciseId: planned.exerciseId,
+            weight: plannedSet.weight,
+            reps: plannedSet.reps,
+            ...(plannedSet.rpe !== undefined ? { rpe: plannedSet.rpe } : {}),
+          })),
+        })),
+        notes: "",
+        feeling: 8,
+      },
+    });
+    scheduleRemoteSave(get, set);
+    return workoutId;
+  },
   addExerciseToActiveWorkout: (exerciseId) => {
     set((state) => {
       if (!state.activeWorkout) return state;
@@ -555,10 +670,22 @@ export const useAppStore = create<AppState>()((set, get) => ({
       feeling: payload?.feeling ?? state.activeWorkout.feeling,
     };
 
+    const plannedWorkoutId = state.activeWorkout.plannedWorkoutId;
     set({
       sessions: [session, ...state.sessions],
       activeWorkout: null,
       lastCompletedSessionId: sessionId,
+      // Si la séance venait du plan coach, on la marque « faite » avec le
+      // vrai sessionId — c'est ici (et seulement ici) que le plan avance.
+      trainingPlan:
+        plannedWorkoutId && state.trainingPlan
+          ? {
+              ...state.trainingPlan,
+              workouts: state.trainingPlan.workouts.map((w) =>
+                w.id === plannedWorkoutId ? { ...w, completedSessionId: sessionId } : w,
+              ),
+            }
+          : state.trainingPlan,
     });
     scheduleRemoteSave(get, set);
     return sessionId;

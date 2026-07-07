@@ -1,52 +1,49 @@
 # IronTrack
 
-Application web premium de suivi de musculation, mobile-first, pensee pour un usage quotidien sur iPhone.
+Application web premium de suivi de musculation, mobile-first, pensée pour un usage quotidien sur iPhone.
 
 ## Stack
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- composants style shadcn/ui
-- Lucide React
-- Recharts
-- backend Next.js via route API `/api/state`
-- session de protection via route API `/api/session`
-- stockage persistant Postgres via `DATABASE_URL`
+- Next.js 16 (App Router) / React 19 / TypeScript
+- Tailwind CSS 4, composants style shadcn/ui, Lucide, Recharts
+- État client : Zustand + backup localStorage + sync serveur (`/api/state`, verrouillage optimiste par révision)
+- Base : Postgres (Neon ou autre) via `DATABASE_URL`
+- Auth : email + mot de passe (bcrypt), cookie de session signé HMAC
+- Coach IA : API Claude (`/api/ai/plan`), réservée aux administrateurs
 
-## Demarrage
+## Démarrage
 
 ```bash
 npm install
-copy .env.example .env.local
+cp .env.example .env.local   # puis renseigner les variables
 npm run dev
 ```
 
-Ouvrir ensuite [http://localhost:3000](http://localhost:3000).
+Ouvrir ensuite [http://localhost:3000](http://localhost:3000) et créer un compte.
 
-## Backend
+## Variables d'environnement
 
-L'application sauvegarde maintenant l'etat complet dans une base Postgres via `DATABASE_URL`.
+| Variable | Rôle | Obligatoire |
+| --- | --- | --- |
+| `DATABASE_URL` | Postgres (auth + persistance). Tables créées automatiquement. | Oui |
+| `SESSION_SECRET` | Clé HMAC des cookies de session. | **Oui en production** (l'app refuse de démarrer sans) |
+| `ANTHROPIC_API_KEY` | Génération de plans par le coach IA. | Non (fonctionnalité désactivée sinon) |
+| `ADMIN_EMAILS` | Emails (séparés par des virgules) autorisés à générer des plans IA. | Non (IA désactivée pour tous sinon) |
 
-Exemple `.env.local` :
+## Architecture des données
 
-```bash
-DATABASE_URL="postgresql://..."
-APP_ACCESS_CODE="votre-code-perso"
-SESSION_SECRET="votre-cle-secrete-optionnelle"
-```
+Chaque utilisateur possède un blob `PersistedAppData` (exercices, séances, objectifs,
+plan d'entraînement, préférences, profil) dans la table `app_state`, versionné par une
+colonne `revision` (verrouillage optimiste : un `PUT /api/state` avec une révision
+périmée renvoie 409 et le client fusionne). Un backup localStorage par utilisateur
+permet l'affichage instantané et le mode hors-ligne, re-synchronisé à la reconnexion.
 
-La table est creee automatiquement au premier appel sur `/api/state`.
-`APP_ACCESS_CODE` protege la version publique de l'app avec un cookie HTTP-only.
-Si `SESSION_SECRET` n'est pas defini, le code d'acces est reutilise comme cle de signature.
+## Fonctionnalités
 
-## Fonctionnalites
-
-- dashboard premium avec resume de progression
-- bibliotheque d'exercices avec CRUD, recherche et filtres par categories
-- detail exercice avec historique, objectifs et courbes
-- mode seance active avec ajout rapide de series
-- resume post-seance et historique detaille
-- statistiques globales
-- parametres avec theme, profil local, export/import JSON, reset et etat backend
+- dashboard avec résumé de progression et plan coach IA
+- bibliothèque d'exercices : CRUD, recherche, filtres par catégorie
+- détail exercice : historique, objectifs (dont « battre son record »), courbes
+- séance active : ajout rapide de séries, notes, ressenti
+- séances planifiées par le coach IA, pré-remplies au démarrage
+- résumé post-séance, historique détaillé, statistiques
+- export / import JSON, thème sombre/clair, unités kg/lb

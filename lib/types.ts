@@ -68,6 +68,8 @@ export interface Goal {
   exerciseId: string;
   type: GoalType;
   targetWeight?: number;
+  /** Objectif « pr » : record au moment de la création (la cible ne bouge plus). */
+  baselineWeight?: number;
   targetReps?: number;
   targetVolume?: number;
   deadline?: string;
@@ -94,6 +96,8 @@ export interface ActiveWorkout {
   exerciseEntries: WorkoutExerciseEntry[];
   notes: string;
   feeling?: number;
+  /** Séance du plan coach dont est issue cette séance (complétée au finish). */
+  plannedWorkoutId?: string;
 }
 
 export interface PlannedSet {
