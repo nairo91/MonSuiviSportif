@@ -11,14 +11,14 @@ test("export JSON puis ré-import : les données reviennent", async ({ page }) =
 
   await page.goto("/settings");
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Exporter/i }).click();
+  await page.getByRole("button", { name: "Export JSON" }).click();
   const download = await downloadPromise;
   const path = await download.path();
   expect(path).toBeTruthy();
 
   // Reset complet puis ré-import du fichier
   page.on("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: /Reinitialiser|Réinitialiser/i }).click();
+  await page.getByRole("button", { name: "Reset complet" }).click();
   await page.goto("/exercises");
   await expect(page.getByText("Exercice Exporté E2E")).toHaveCount(0);
 
