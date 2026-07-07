@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { formatRelative, formatVolume, formatWeight } from "@/lib/format";
+import { RestTimer } from "@/components/rest-timer";
 import { getEntryVolume, getExerciseStats } from "@/lib/selectors";
+import { resolveRestDuration } from "@/lib/rest-timer";
 import { useAppStore } from "@/lib/store";
 import { CategoryFilter } from "@/lib/types";
 
@@ -48,6 +50,7 @@ export default function ActiveWorkoutPage() {
   const [elapsedMinutes, setElapsedMinutes] = useState(() =>
     activeWorkout ? computeElapsedMinutes(activeWorkout.startedAt) : 1,
   );
+  const [restTimer, setRestTimer] = useState<{ endsAt: number; totalSeconds: number } | null>(null);
 
   useEffect(() => {
     if (!activeWorkout) return;
@@ -87,7 +90,7 @@ export default function ActiveWorkoutPage() {
       weight: stats.lastWeight ? String(stats.lastWeight) : "",
       reps: stats.lastReps ? String(stats.lastReps) : "10",
       rpe: "8",
-      rest: "90",
+      rest: String(preferences.restTimerSeconds || 90),
       note: "",
     };
   };
@@ -127,7 +130,14 @@ export default function ActiveWorkoutPage() {
         note: "",
       },
     }));
-    toast.success("Serie ajoutee.");
+
+    if (preferences.restTimerEnabled) {
+      const totalSeconds = resolveRestDuration(Number(draft.rest || 0) || undefined, preferences.restTimerSeconds);
+      setRestTimer({ endsAt: Date.now() + totalSeconds * 1000, totalSeconds });
+      toast.success("Série ajoutée, repos lancé.");
+    } else {
+      toast.success("Serie ajoutee.");
+    }
   };
 
   const handleFinish = () => {
@@ -339,6 +349,21 @@ export default function ActiveWorkoutPage() {
           <Button onClick={handleFinish}>Terminer</Button>
         </div>
       </div>
+      <RestTimer
+        endsAt={restTimer?.endsAt ?? null}
+        totalSeconds={restTimer?.totalSeconds ?? 0}
+        onExtend={(extraSeconds) =>
+          setRestTimer((current) =>
+            current
+              ? {
+                  endsAt: Math.max(current.endsAt, Date.now()) + extraSeconds * 1000,
+                  totalSeconds: current.totalSeconds + extraSeconds,
+                }
+              : current,
+          )
+        }
+        onDismiss={() => setRestTimer(null)}
+      />
     </div>
   );
 }
