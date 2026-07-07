@@ -17,6 +17,12 @@ test("séance complète : sélection, séries, terminer, historique", async ({ p
   await page.getByRole("button", { name: "Valider la serie" }).first().click();
   await expect(page.getByText(/Serie 1/i)).toBeVisible();
 
+  // Le minuteur de repos démarre automatiquement, puis peut être passé
+  await expect(page.getByRole("timer")).toBeVisible();
+  await expect(page.getByText(/^Repos$/)).toBeVisible();
+  await page.getByRole("button", { name: "Passer le repos" }).click();
+  await expect(page.getByRole("timer")).toHaveCount(0);
+
   // Termine la séance
   await page.getByRole("button", { name: "Terminer" }).click();
   await expect(page).toHaveURL(/workouts\/summary/);

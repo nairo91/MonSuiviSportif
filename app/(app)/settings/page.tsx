@@ -10,8 +10,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { REST_DURATION_OPTIONS } from "@/lib/rest-timer";
 import { formatNumber } from "@/lib/utils";
-import { useAppStore, clearActiveUserLocalData } from "@/lib/store";
+import { useAppStore, clearActiveUserLocalData, } from "@/lib/store";
 
 export default function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -29,6 +31,8 @@ export default function SettingsPage() {
   const lastSyncError = useAppStore((state) => state.lastSyncError);
   const setThemePreference = useAppStore((state) => state.setThemePreference);
   const setUnits = useAppStore((state) => state.setUnits);
+  const setRestTimerEnabled = useAppStore((state) => state.setRestTimerEnabled);
+  const setRestTimerSeconds = useAppStore((state) => state.setRestTimerSeconds);
   const updateProfile = useAppStore((state) => state.updateProfile);
   const importData = useAppStore((state) => state.importData);
   const resetData = useAppStore((state) => state.resetData);
@@ -178,6 +182,47 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="glass-card">
+        <CardContent className="space-y-4">
+          <h2 className="font-display text-xl font-semibold">Séance</h2>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label>Minuteur de repos</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Compte à rebours automatique après chaque série validée.
+              </p>
+            </div>
+            <Switch
+              checked={preferences.restTimerEnabled}
+              onCheckedChange={(checked) => setRestTimerEnabled(Boolean(checked))}
+            />
+          </div>
+          {preferences.restTimerEnabled ? (
+            <div className="space-y-2">
+              <Label>Repos par défaut</Label>
+              <Select
+                value={String(preferences.restTimerSeconds)}
+                onValueChange={(value) => setRestTimerSeconds(Number(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REST_DURATION_OPTIONS.map((seconds) => (
+                    <SelectItem key={seconds} value={String(seconds)}>
+                      {seconds >= 60 ? `${Math.floor(seconds / 60)} min ${seconds % 60 ? `${seconds % 60} s` : ""}`.trim() : `${seconds} s`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Ajustable série par série via le champ «&nbsp;Repos sec&nbsp;» pendant la séance.
+              </p>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

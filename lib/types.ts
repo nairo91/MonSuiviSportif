@@ -82,6 +82,10 @@ export interface UserPreferences {
   lastUsedExerciseCategoryFilter: CategoryFilter;
   units: Units;
   onboardingCompleted: boolean;
+  /** Minuteur de repos automatique après chaque série validée. */
+  restTimerEnabled: boolean;
+  /** Durée de repos par défaut (secondes), surchargée par le champ « Repos » de la série. */
+  restTimerSeconds: number;
 }
 
 export interface UserProfile {

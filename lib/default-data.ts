@@ -53,6 +53,8 @@ export function createEmptyAppData(): PersistedAppData {
       lastUsedExerciseCategoryFilter: "Tous",
       units: "kg",
       onboardingCompleted: false,
+      restTimerEnabled: true,
+      restTimerSeconds: 90,
     },
     profile: {
       name: "",

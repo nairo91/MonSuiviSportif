@@ -21,6 +21,8 @@ interface AppState extends PersistedAppData {
   completeOnboarding: (payload: Partial<UserProfile>) => void;
   setThemePreference: (theme: PersistedAppData["preferences"]["theme"]) => void;
   setUnits: (units: PersistedAppData["preferences"]["units"]) => void;
+  setRestTimerEnabled: (enabled: boolean) => void;
+  setRestTimerSeconds: (seconds: number) => void;
   setCategoryFilter: (filter: PersistedAppData["preferences"]["lastUsedExerciseCategoryFilter"]) => void;
   updateProfile: (payload: Partial<UserProfile>) => void;
   addExercise: (payload: ExerciseInput) => string;
@@ -451,6 +453,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   setUnits: (units) => {
     set((state) => ({ preferences: { ...state.preferences, units } }));
+    scheduleRemoteSave(get, set);
+  },
+  setRestTimerEnabled: (enabled) => {
+    set((state) => ({ preferences: { ...state.preferences, restTimerEnabled: enabled } }));
+    scheduleRemoteSave(get, set);
+  },
+  setRestTimerSeconds: (seconds) => {
+    set((state) => ({
+      preferences: { ...state.preferences, restTimerSeconds: Math.min(Math.max(seconds, 15), 600) },
+    }));
     scheduleRemoteSave(get, set);
   },
   setCategoryFilter: (filter) => {
