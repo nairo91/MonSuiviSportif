@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { Activity, ArrowRight, Brain, ChevronRight, Pencil, Sparkles, Trophy } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -14,11 +15,13 @@ import { useAppStore } from "@/lib/store";
 import { TrainingPlan } from "@/lib/types";
 
 function CoachPlanCard({ plan }: { plan: TrainingPlan }) {
+  // Date.now() figé au premier rendu : les composants doivent rester purs.
+  const [now] = useState(() => Date.now());
   const totalWorkouts = plan.workouts.length;
   const completedWorkouts = plan.workouts.filter((w) => w.completedSessionId).length;
   const completionPercent = totalWorkouts > 0 ? Math.round((completedWorkouts / totalWorkouts) * 100) : 0;
 
-  const weeksSinceStart = Math.floor((Date.now() - new Date(plan.createdAt).getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const weeksSinceStart = Math.floor((now - new Date(plan.createdAt).getTime()) / (7 * 24 * 60 * 60 * 1000));
   const currentWeek = Math.min(weeksSinceStart + 1, plan.durationWeeks);
 
   const thisWeekWorkouts = plan.workouts.filter((w) => w.weekNumber === currentWeek);
