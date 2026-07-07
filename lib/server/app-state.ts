@@ -1,6 +1,7 @@
 import { createEmptyAppData, normalizePersistedAppData } from "@/lib/default-data";
 import { PersistedAppData, ServerStateSnapshot } from "@/lib/types";
 import { getDatabase, hasDatabaseConfig } from "@/lib/server/database";
+import type postgres from "postgres";
 
 async function ensureTable() {
   const sql = getDatabase();
@@ -31,7 +32,7 @@ async function ensureUserRow(userId: string) {
 
   await sql`
     INSERT INTO app_state (id, user_id, state, revision, updated_at)
-    VALUES (${userId}, ${userId}, ${sql.json(initial)}, 0, TIMEZONE('utc', NOW()))
+    VALUES (${userId}, ${userId}, ${sql.json(initial as unknown as postgres.JSONValue)}, 0, TIMEZONE('utc', NOW()))
     ON CONFLICT (user_id)
     DO NOTHING
   `;
@@ -110,7 +111,7 @@ export async function saveAppState(
   const rows = await sql<{ revision: number }[]>`
     UPDATE app_state
     SET
-      state = ${sql.json(normalized)},
+      state = ${sql.json(normalized as unknown as postgres.JSONValue)},
       revision = revision + 1,
       updated_at = TIMEZONE('utc', NOW())
     WHERE user_id = ${userId}

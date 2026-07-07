@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { setActiveUser } from "@/lib/store";
 
 type AuthStatus = "checking" | "unauthenticated" | "authenticated" | "no-backend";
 type AuthMode = "login" | "register";
@@ -27,6 +28,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     try {
       const response = await fetch("/api/session", { method: "GET", cache: "no-store" });
       const payload = await response.json().catch(() => null);
+      if (payload?.authenticated) {
+        setActiveUser(typeof payload.userId === "string" ? payload.userId : null);
+      }
       setStatus(payload?.authenticated ? "authenticated" : "unauthenticated");
     } catch {
       setStatus("unauthenticated");
@@ -62,6 +66,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      setActiveUser(typeof payload?.userId === "string" ? payload.userId : null);
       setStatus("authenticated");
     } catch {
       setError("Connexion impossible. Réessayez.");
