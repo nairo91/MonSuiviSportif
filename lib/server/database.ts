@@ -19,6 +19,16 @@ function sanitizeDatabaseUrl(url: string): string {
   }
 }
 
+// SSL exigé par défaut (Neon/production). `?sslmode=disable` dans l'URL
+// permet un Postgres local sans TLS (CI, développement).
+function resolveSsl(url: string): "require" | false {
+  try {
+    return new URL(url).searchParams.get("sslmode") === "disable" ? false : "require";
+  } catch {
+    return "require";
+  }
+}
+
 export function getDatabase() {
   if (!process.env.DATABASE_URL) {
     return null;
@@ -26,7 +36,7 @@ export function getDatabase() {
 
   if (!client) {
     client = postgres(sanitizeDatabaseUrl(process.env.DATABASE_URL), {
-      ssl: "require",
+      ssl: resolveSsl(process.env.DATABASE_URL),
       max: 1,
       idle_timeout: 20,
       connect_timeout: 15,
