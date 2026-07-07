@@ -149,7 +149,13 @@ export default function ExerciseDetailPage() {
                     <Label>Valeur cible</Label>
                     <Input value={goalValue} onChange={(event) => setGoalValue(event.target.value)} />
                   </div>
-                ) : null}
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {stats.bestWeight > 0
+                      ? `Cible : battre ton record actuel (${stats.bestWeight} kg) en atteignant ${stats.bestWeight + 2.5} kg.`
+                      : "Aucun record pour l'instant : l'objectif sera atteint dès ta première charge enregistrée."}
+                  </p>
+                )}
                 <Button
                   className="w-full"
                   onClick={() => {
@@ -157,9 +163,15 @@ export default function ExerciseDetailPage() {
                       id: goal?.id,
                       exerciseId: exercise.id,
                       type: goalType,
-                      targetWeight: goalType === "weight" ? Number(goalValue) : undefined,
+                      targetWeight:
+                        goalType === "weight"
+                          ? Number(goalValue)
+                          : goalType === "pr"
+                            ? stats.bestWeight + 2.5
+                            : undefined,
                       targetReps: goalType === "reps" ? Number(goalValue) : undefined,
                       targetVolume: goalType === "volume" ? Number(goalValue) : undefined,
+                      baselineWeight: goalType === "pr" ? stats.bestWeight : undefined,
                     });
                     toast.success("Objectif enregistre.");
                   }}

@@ -43,10 +43,12 @@ export function formatGoalValue(
     targetWeight?: number;
     targetReps?: number;
     targetVolume?: number;
+    baselineWeight?: number;
   },
 ) {
   if (type === "weight") return `${goal.targetWeight ?? 0} kg`;
   if (type === "reps") return `${goal.targetReps ?? 0} reps`;
   if (type === "volume") return `${goal.targetVolume ?? 0} kg`;
+  if (goal.targetWeight !== undefined) return `Battre le PR : ${goal.targetWeight} kg`;
   return "Battre le PR";
 }

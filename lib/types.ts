@@ -68,6 +68,8 @@ export interface Goal {
   exerciseId: string;
   type: GoalType;
   targetWeight?: number;
+  /** Objectif « pr » : record au moment de la création (la cible ne bouge plus). */
+  baselineWeight?: number;
   targetReps?: number;
   targetVolume?: number;
   deadline?: string;

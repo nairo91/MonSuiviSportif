@@ -135,12 +135,22 @@ export function getGoalProgress(goal: Goal, sessions: WorkoutSession[]): GoalPro
   } else if (goal.type === "volume") {
     current = stats.bestVolume;
     target = goal.targetVolume ?? 1;
-  } else {
-    current = stats.bestWeight;
-    target = stats.bestWeight + 2.5;
   }
 
-  const progress = clamp(Math.round((current / target) * 100), 0, 100);
+  let progress: number;
+
+  if (goal.type === "pr") {
+    // Objectif PR : battre le record établi à la CRÉATION de l'objectif.
+    // Avant : cible = record actuel + 2,5 -> la cible suivait le record et
+    // la progression restait bloquée vers ~98 % sans jamais être atteinte.
+    const baseline = goal.baselineWeight ?? stats.bestWeight;
+    current = stats.bestWeight;
+    target = goal.targetWeight ?? baseline + 2.5;
+    const span = Math.max(target - baseline, 0.001);
+    progress = clamp(Math.round(((current - baseline) / span) * 100), 0, 100);
+  } else {
+    progress = target > 0 ? clamp(Math.round((current / target) * 100), 0, 100) : 0;
+  }
   const status =
     progress >= 100 ? "atteint" : progress >= 85 ? "presque atteint" : "en cours";
 
